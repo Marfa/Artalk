@@ -95,11 +95,4 @@ jobs:
               echo "Run the one-time migration from deploy/README.md" >&2
               exit 1
             fi
-            # Only secrets may be sourced (quoted KEY=value). Compose reads .env itself.
-            if [[ -f .env.secrets ]]; then
-              set -a
-              # shellcheck disable=SC1091
-              source .env.secrets
-              set +a
-            fi
             bash deploy/scripts/vps-deploy.sh

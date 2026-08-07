@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/artalkjs/artalk/v2/internal/ban"
 	"github.com/artalkjs/artalk/v2/internal/core"
 	"github.com/artalkjs/artalk/v2/internal/entity"
 	"github.com/artalkjs/artalk/v2/internal/i18n"
@@ -56,6 +57,11 @@ func CommentCreate(app *core.App, router fiber.Router) {
 		}
 		if p.Link != "" && !utils.ValidateURL(p.Link) {
 			return common.RespError(c, 400, i18n.T("Invalid {{name}}", Map{"name": i18n.T("Link")}))
+		}
+
+		// Skip ban check for authenticated admins (they must still be able to post).
+		if !common.CheckIsAdminReq(app, c) && ban.IsEmailBanned(p.Email) {
+			return common.RespError(c, 403, i18n.T("You are banned from commenting"))
 		}
 
 		if _, ok, resp := common.CheckSiteExist(app, c, p.SiteName); !ok {

@@ -101,6 +101,7 @@ func (dao *Dao) CookCommentForEmail(c *entity.Comment) entity.CookedCommentForEm
 		Site:       dao.CookSite(&site),
 		CookedComment: entity.CookedComment{
 			ID:             c.ID,
+			UserID:         c.UserID,
 			EmailEncrypted: getCommentEmailHash(user.Email),
 			Link:           user.Link,
 			UA:             c.UA,
@@ -111,6 +112,9 @@ func (dao *Dao) CookCommentForEmail(c *entity.Comment) entity.CookedCommentForEm
 			Rid:            c.Rid,
 			BadgeName:      user.BadgeName,
 			BadgeColor:     user.BadgeColor,
+			PageKey:        c.PageKey,
+			PageURL:        dao.GetPageAccessibleURL(&page, &site),
+			SiteName:       c.SiteName,
 		},
 	}
 }

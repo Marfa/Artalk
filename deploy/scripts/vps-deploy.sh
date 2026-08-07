@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pull pre-built GHCR image and restart Artalk. No docker build on the VPS.
+# Pull pre-built Artalk GHCR image; build tiny marfabot sidecar locally; restart.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/artalk}"
@@ -40,8 +40,9 @@ if [[ -n "${GHCR_TOKEN:-}" ]]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 fi
 
-docker compose -f "$COMPOSE_FILE" pull
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --no-build
+docker compose -f "$COMPOSE_FILE" pull artalk
+docker compose -f "$COMPOSE_FILE" build marfabot
+docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
 if [[ -f deploy/scripts/backup.sh ]]; then
   install -m 755 deploy/scripts/backup.sh /usr/local/sbin/artalk-backup

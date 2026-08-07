@@ -1,5 +1,6 @@
 # Production compose for comments.themarfa.name
-# Image is built on GitHub Actions and pulled from GHCR — never build on the VPS.
+# Artalk image is built on GitHub Actions and pulled from GHCR — never build Artalk on the VPS.
+# marfabot is a tiny Python sidecar; build it on the VPS from deploy/marfabot.
 #
 # Secrets (ATK_APP_KEY, ATK_ADMIN_USERS_0_PASSWORD, …) live only in .env via env_file
 # so bcrypt `$` characters are not eaten by Compose interpolation.
@@ -29,3 +30,29 @@ services:
       ATK_ADMIN_USERS_0_BADGE_NAME: Admin
       ATK_ADMIN_USERS_0_BADGE_COLOR: "#0083FF"
       ATK_ADMIN_USERS_0_RECEIVE__EMAIL: "true"
+
+  marfabot:
+    build: ./deploy/marfabot
+    image: marfabot:local
+    container_name: marfabot
+    restart: unless-stopped
+    depends_on:
+      - artalk
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+      - path: .env.secrets
+        required: false
+    environment:
+      TZ: Europe/Madrid
+      MARFABOT_CHAT_ID: ${MARFABOT_CHAT_ID:-150697169}
+      MARFABOT_ALLOWED_USER_IDS: ${MARFABOT_ALLOWED_USER_IDS:-150697169}
+      MARFABOT_LISTEN_HOST: 0.0.0.0
+      MARFABOT_LISTEN_PORT: "8086"
+      MARFABOT_BAN_FILE: /data/banned_emails.txt
+      MARFABOT_SIDEBAR_URL: ${MARFABOT_SIDEBAR_URL:-https://comments.themarfa.name}
+      ARTALK_API_URL: http://artalk:23366
+      ARTALK_ADMIN_EMAIL: ${ARTALK_ADMIN_EMAIL:-}
+      ARTALK_ADMIN_NAME: ${ARTALK_ADMIN_NAME:-admin}
+      # TELEGRAM_BOT_TOKEN, MARFABOT_HOOK_SECRET, ARTALK_ADMIN_PASSWORD: env_file only

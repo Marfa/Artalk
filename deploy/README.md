@@ -28,8 +28,9 @@ cp deploy/.env.secrets.example .env.secrets
 # Fill ATK_APP_KEY and ATK_ADMIN_USERS_0_PASSWORD in .env.secrets (bcrypt `$` stays single).
 chmod 600 .env .env.secrets
 cd /opt/artalk
-docker compose -f compose.instance.yml pull
-docker compose -f compose.instance.yml up -d --no-build
+docker compose -f compose.instance.yml pull artalk
+docker compose -f compose.instance.yml build marfabot
+docker compose -f compose.instance.yml up -d
 ```
 
 After that, every push to `master` builds on GitHub and runs `deploy/scripts/vps-deploy.sh` over SSH.
@@ -40,19 +41,20 @@ GitHub Actions repo secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
 
 | File | Contents |
 |---|---|
-| `/opt/artalk/.env` | Non-secret Compose vars (`ARTALK_IMAGE_TAG`, site URLs) |
-| `/opt/artalk/.env.secrets` | `ATK_APP_KEY`, bcrypt admin password, optional `GHCR_TOKEN` |
+| `/opt/artalk/.env` | Non-secret Compose vars (`ARTALK_IMAGE_TAG`, site URLs, `MARFABOT_CHAT_ID`) |
+| `/opt/artalk/.env.secrets` | `ATK_APP_KEY`, bcrypt admin hash, `TELEGRAM_BOT_TOKEN`, `MARFABOT_HOOK_SECRET`, `ARTALK_ADMIN_PASSWORD` (plaintext for API) |
 
-Telegram / SMTP and other keys stay in `/opt/artalk/data/artalk.yml` (not in git). Use `deploy/artalk.yml.example` as a reference.
+In `data/artalk.yml`: set `admin_notify.telegram.enabled: false` and `admin_notify.webhook.url: http://marfabot:8086/hook/<same-as-MARFABOT_HOOK_SECRET>`.
 
 ## Layout
 
 | Path | Role |
 |---|---|
-| `compose.instance.yml` | Production compose (GHCR image, no `build:`) |
+| `compose.instance.yml` | Artalk (GHCR) + marfabot sidecar |
+| `deploy/marfabot/` | Telegram moderation bot |
 | `deploy/artalk.yml.example` | Sanitized instance config template |
 | `deploy/nginx-artalk.conf` | Nginx site snippet |
-| `deploy/scripts/vps-deploy.sh` | Pull image + restart |
+| `deploy/scripts/vps-deploy.sh` | Pull Artalk, build marfabot, restart |
 | `deploy/scripts/backup.sh` | Nightly DB/export backup |
 | `deploy/scripts/fc_to_artrans.py` | FastComments → Artrans migration |
 

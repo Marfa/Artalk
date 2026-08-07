@@ -211,7 +211,7 @@ admin_notify:
     mail_subject: '[{{site_name}}] Новый комментарий к "{{page_title}}"'
     mail_tpl: ""
   telegram:
-    enabled: true
+    enabled: false
     api_token: ""
     receivers:
       - 150697169
@@ -223,8 +223,8 @@ admin_notify:
     webhook_url: ""
     msg_type: "text"
   webhook:
-    enabled: false
-    url: ""
+    enabled: true
+    url: "http://marfabot:8086/hook/CHANGE_ME_HOOK_SECRET"
   ding_talk:
     enabled: false
     token: ""

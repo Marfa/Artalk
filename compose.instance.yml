@@ -1,0 +1,29 @@
+# Production compose for comments.themarfa.name
+# Image is built on GitHub Actions and pulled from GHCR — never build on the VPS.
+#
+# Secrets (ATK_APP_KEY, ATK_ADMIN_USERS_0_PASSWORD, …) live only in .env via env_file
+# so bcrypt `$` characters are not eaten by Compose interpolation.
+services:
+  artalk:
+    image: ghcr.io/marfa/artalk:${ARTALK_IMAGE_TAG:-instance-latest}
+    container_name: artalk
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8085:23366"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    environment:
+      TZ: Europe/Madrid
+      ATK_LOCALE: ru
+      ATK_TIMEZONE: Europe/Madrid
+      ATK_SITE_DEFAULT: ${ARTALK_SITE_NAME:-All-in-One Person}
+      ATK_SITE_URL: ${ARTALK_SITE_URL:-https://blog.themarfa.name}
+      ATK_TRUSTED_DOMAINS: ${ATK_TRUSTED_DOMAINS:-https://blog.themarfa.name https://comments.themarfa.name}
+      ATK_HTTP_PROXY__HEADER: X-Forwarded-For
+      ATK_ADMIN_USERS_0_NAME: ${ARTALK_ADMIN_NAME:-admin}
+      ATK_ADMIN_USERS_0_EMAIL: ${ARTALK_ADMIN_EMAIL:-}
+      ATK_ADMIN_USERS_0_BADGE_NAME: Admin
+      ATK_ADMIN_USERS_0_BADGE_COLOR: "#0083FF"
+      ATK_ADMIN_USERS_0_RECEIVE__EMAIL: "true"

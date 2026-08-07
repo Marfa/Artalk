@@ -62,6 +62,12 @@ node_modules
 /bin
 /data
 /local
+/exports
+/backups
+*.artrans
+*.artrans.json
+!.env.example
+!deploy/.env.example
 
 # always compile latest version
 /public/sidebar

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Git post-commit: drop stale build/migration artifacts (mtime > 7 days).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+exec python3 "$ROOT/scripts/clean_old_artifacts.py" --root "$ROOT"

@@ -1,0 +1,31 @@
+---
+description: After every commit, delete stale non-source build/migration artifacts older than 7 days
+alwaysApply: true
+---
+
+# Clean stale build artifacts after commit
+
+After **every successful `git commit`**, run:
+
+```bash
+python3 scripts/clean_old_artifacts.py
+```
+
+## What counts as an artifact (only if mtime older than 7 days)
+
+- Under `exports/`, `data/`
+- `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `dist/`, `build/`
+- `*.artrans`, `*.artrans.json`, `*.pyc`, `*.pyo`, `*.log`, `.DS_Store`
+
+## Never delete
+
+- Source: `deploy/`, `scripts/`, `.cursor/rules/`, `.env.example`
+- Secrets: `.env`, `.ssh/`
+- Anything newer than 7 days
+
+## Automation already wired
+
+- Cursor: `.cursor/hooks.json` → `afterShellExecution` matcher `git commit`
+- Git: `scripts/git-hooks/post-commit` (copy to `.git/hooks/post-commit` after `git init`)
+
+If the hook did not run (commit outside Cursor / hooks disabled), run the script yourself before finishing the turn.

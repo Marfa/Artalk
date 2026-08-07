@@ -1,0 +1,384 @@
+# Listen host
+host: "0.0.0.0"
+
+# Listen port
+port: 23366
+
+# App Key (for generation of JWT)
+app_key: ""
+
+# Debug mode
+debug: false
+
+# Language (follow Unicode BCP 47) ["en", "zh-CN", "zh-TW", "ja", "fr", "ko", "ru", "tr"]
+# -- see https://www.techonthenet.com/js/language_tags.php --
+locale: ru
+
+# Timezone (follow IANA Time Zone Database)
+# -- see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones --
+timezone: Europe/Madrid
+
+# Default site name (create when app is first launched)
+site_default: All-in-One Person
+
+# Default site url
+site_url: "https://blog.themarfa.name"
+
+# Login timeout (in seconds)
+login_timeout: 259200
+
+# Database
+db:
+  # Database type ["sqlite", "mysql", "pgsql", "mssql"]
+  type: sqlite
+  # Database file (only for SQLite)
+  file: ./data/artalk.db
+  # Table prefix (e.g. "atk_")
+  table_prefix: ""
+  # -- The following is not necessary for SQLite --
+  # Database name
+  name: artalk
+  # Host address
+  host: localhost
+  # Host port
+  port: 3306
+  # Database user
+  user: root
+  # Database password
+  password: ""
+  # Database charset
+  charset: utf8mb4
+  # Enable SSL mode
+  ssl: false
+  # Prepared Statement
+  prepare_stmt: true
+
+# Web server
+http:
+  # Body size limit (unit: MB)
+  body_limit: 100
+  # Proxy Header (fill `X-Forwarded-For` to get user real IP if behind a trusted reverse proxy or CDN)
+  proxy_header: "X-Forwarded-For"
+
+# Logging
+log:
+  # Enable logging
+  enabled: true
+  # Log file path
+  filename: ./data/artalk.log
+
+# Cache
+cache:
+  # Enable cache
+  enabled: false
+  # Cache type ["redis", "memcache", "builtin"]
+  type: builtin
+  # Cache expiration time (in minutes)
+  expires: 30
+  # Cache warm up (warm up cache when program starts)
+  warm_up: false
+  # -- The following is not necessary for `builtin` cache --
+  # Cache server address (e.g. "localhost:6379")
+  server: ""
+  # Redis config
+  redis:
+    # Connection type ["tcp", "unix"]
+    network: tcp
+    # Redis username
+    username: ""
+    # Redis password
+    password: ""
+    # Redis database number (e.g. 0)
+    db: 0
+
+# Trusted domains
+# -- e.g. ["https://artalk.example.com:23366"] add url of your site her --
+trusted_domains:
+  - https://blog.themarfa.name
+  - https://comments.themarfa.name
+
+# SSL
+ssl:
+  # Enable SSL
+  enabled: false
+  # Certificate file path
+  # (e.g. "/etc/letsencrypt/live/example.com/fullchain.pem")
+  cert_path: ""
+  # Key file path
+  # (e.g. "/etc/letsencrypt/live/example.com/privkey.pem")
+  key_path: ""
+
+# Moderator
+# -- Comment examination before being public --
+moderator:
+  pending_default: false
+  api_fail_block: false
+  akismet_key: ""
+  tencent:
+    enabled: false
+    secret_id: ""
+    secret_key: ""
+    region: ap-guangzhou
+  aliyun:
+    enabled: false
+    access_key_id: ""
+    access_key_secret: ""
+    region: cn-shanghai
+  keywords:
+    enabled: true
+    pending: true
+    files:
+      - ./data/link_keywords.txt
+    file_sep: "|"
+    replace_to: "x"
+
+# Captcha
+captcha:
+  # Enable captcha
+  enabled: false
+  # Captcha is required always
+  always: false
+  # Captcha type ["image", "turnstile", "recaptcha", "hcaptcha", "geetest"]
+  captcha_type: image
+  # Action limit
+  # (the number of actions required to activate captcha)
+  action_limit: 3
+  # Reset Timeout (timeout to reset action counter. unit: s, set to -1 to disable)
+  action_reset: 60
+  # Turnstile
+  # (https://www.cloudflare.com/products/turnstile/)
+  turnstile:
+    site_key: ""
+    secret_key: ""
+  # reCaptcha
+  # (https://www.google.com/recaptcha/about/)
+  recaptcha:
+    site_key: ""
+    secret_key: ""
+  # hCaptcha (https://www.hcaptcha.com/)
+  hcaptcha:
+    site_key: ""
+    secret_key: ""
+  # Geetest (https://www.geetest.com)
+  geetest:
+    captcha_id: ""
+    captcha_key: ""
+
+# Upload
+img_upload:
+  # Enable image upload
+  enabled: true
+  # Image storage
+  path: ./data/artalk-img/
+  # Image size limit (unit: MB)
+  max_size: 5
+  # Image link base path (default: "/static/images/")
+  public_path: null
+  # Upgit config
+  upgit:
+    # Enable Upgit
+    enabled: false
+    # Command line arguments
+    exec: upgit -c UPGIT_CONF_FILE_PATH -t /artalk-img
+    # Delete local image after upload success
+    del_local: true
+
+# Email
+email:
+  enabled: false
+  send_type: smtp
+  send_name: "All-in-One Person"
+  send_addr: kdokuchaev@dfnx.ru
+  mail_subject: "[{{site_name}}] Вам ответил @{{reply_nick}}"
+  mail_tpl: default
+  smtp:
+    host: mail.dfnx.ru
+    port: 587
+    username: kdokuchaev@dfnx.ru
+    password: ""
+  ali_dm:
+    access_key_id: ""
+    access_key_secret: ""
+    account_name: noreply@example.com
+
+# Multi-Push
+admin_notify:
+  notify_tpl: default
+  notify_pending: true
+  noise_mode: false
+  email:
+    enabled: false
+    mail_subject: '[{{site_name}}] Новый комментарий к "{{page_title}}"'
+    mail_tpl: ""
+  telegram:
+    enabled: true
+    api_token: ""
+    receivers:
+      - 150697169
+  bark:
+    enabled: false
+    server: http://day.app/xxxxxxx/
+  lark:
+    enabled: false
+    webhook_url: ""
+    msg_type: "text"
+  webhook:
+    enabled: false
+    url: ""
+  ding_talk:
+    enabled: false
+    token: ""
+    secret: ""
+  slack:
+    enabled: false
+    oauth_token: ""
+    receivers:
+      - "CHANNEL_ID"
+  line:
+    enabled: false
+    channel_secret: ""
+    channel_access_token: ""
+    receivers:
+      - USER_ID_1
+
+# Social Login
+auth:
+  enabled: true
+  anonymous: true
+  callback: "https://comments.themarfa.name/api/v2/auth/{provider}/callback"
+  email:
+    enabled: false
+    verify_subject: "Ваш код - {{code}}"
+    verify_tpl: default
+  github:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  gitlab:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  gitea:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  google:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  mastodon:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  twitter:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  facebook:
+    enabled: false
+    client_id: ""
+    client_secret: ""
+  discord:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  steam:
+    enabled: true
+    api_key: ""
+  apple:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  microsoft:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  wechat:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  tiktok:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  slack:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  line:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  patreon:
+    enabled: true
+    client_id: ""
+    client_secret: ""
+  auth0:
+    enabled: false
+    client_id: ""
+    client_secret: ""
+    domain: ""
+  sso:
+    enabled: false
+    issuer: ""
+
+# UI Settings
+frontend:
+  # Comment box placeholder
+  placeholder: ""
+  # Text to display when there is
+  noComment: ""
+  # Text of the send button
+  sendBtn: ""
+  # Movable comment box
+  editorTravel: true
+  # Emoticons
+  emoticons: https://cdn.jsdelivr.net/gh/ArtalkJS/Emoticons/grps/default.json
+  # Vote button
+  vote: true
+  # Vote down button
+  voteDown: true
+  # User UA badge
+  uaBadge: true
+  # Comment sorting
+  listSort: true
+  # Editor real-time preview
+  preview: true
+  # Flatten mode ["auto", true, false]
+  flatMode: true
+  # Dark mode ["inherit", "auto"]
+  darkMode: inherit
+  # Maximum nesting level
+  nestMax: 2
+  # Nesting comment sorting rules ["DATE_ASC", "DATE_DESC", "VOTE_UP_DESC"]
+  nestSort: DATE_ASC
+  # Gravatar
+  gravatar:
+    # API URL
+    mirror: https://www.gravatar.com/avatar/
+    # API parameters
+    params: sha256=1&d=mp&s=240
+  # Comment pagination
+  pagination:
+    # Number of comments per page
+    pageSize: 20
+    # Load more mode (disabled to use pagination bar)
+    readMore: true
+    # Scroll loading
+    autoLoad: true
+  # Content height limit
+  heightLimit:
+    # Comment content height limit (unit: px)
+    content: 300
+    # Sub-comment area height limit (unit: px)
+    children: 400
+    # Scrollable (scrollable height limit area)
+    scrollable: false
+  # Image lazy load [false, "native", "data-src"]
+  imgLazyLoad: false
+  # Request timeout (unit: ms)
+  reqTimeout: 15000
+  # Version check
+  versionCheck: true
+  # Plugins
+  pluginURLs: []

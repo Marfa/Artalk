@@ -1,0 +1,33 @@
+---
+description: Artalk self-host ops — layout, secrets, deploy invariants for this repo
+alwaysApply: true
+---
+
+# Artalk project
+
+Fork of [ArtalkJS/Artalk](https://github.com/ArtalkJS/Artalk) for `blog.themarfa.name`, reverse-proxied at `comments.themarfa.name`.
+
+## Layout
+
+| Path | Role |
+|---|---|
+| `compose.instance.yml` | Production compose — GHCR image only, no `build:` on VPS |
+| `deploy/` | `artalk.yml.example`, `nginx-artalk.conf`, `.env.example`, instance scripts |
+| `deploy/scripts/` | VPS deploy, backup, FastComments → Artrans migration |
+| `exports/` | Comment dumps; gitignored — do not commit |
+| `.github/workflows/deploy-instance.yml` | Build on GitHub → GHCR → SSH pull on VPS |
+
+## Invariants
+
+- Secrets (`ATK_APP_KEY`, admin passwords, API keys, Telegram tokens, SSH) live in `.env` or host env — never paste real values into tracked files, chat dumps, or README examples.
+- Prefer env/`ATK_*` overrides over editing committed secrets in compose/YAML.
+- Pin the Artalk image tag in compose for production (`instance-latest` or `sha-*`, never unpinned Docker Hub `:latest` for prod).
+- Build the Docker image on GitHub Actions; the VPS only `docker compose pull` + `up --no-build`.
+- Bind Artalk publish port to `127.0.0.1` only; public access goes through nginx (or TLS terminator) on the VPS.
+- Keep `ATK_TRUSTED_DOMAINS` / site URL aligned with the blog and comments hostnames.
+- Migration scripts: stdlib-first Python, argparse CLI, no new deps unless explicitly requested.
+- Do not rewrite `exports/` data in place; write new output paths.
+
+## Out of scope unless asked
+
+Frontend Artalk widget embedding, blog theme changes, and unrelated cloud platforms (Vercel/Netlify).

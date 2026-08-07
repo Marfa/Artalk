@@ -1,0 +1,27 @@
+---
+description: Docker Compose, Artalk YAML, and nginx reverse-proxy conventions for this deploy
+globs: "**/*.{yml,yaml,conf}"
+alwaysApply: false
+---
+
+# Deploy config (Compose / Artalk YAML / nginx)
+
+## docker-compose
+
+- Pin image tags; avoid `:latest` in production.
+- Do not bake secrets into the compose file; use `${VAR}` from `.env`.
+- Persist data with a named or bind volume under `./data` (gitignored).
+- Keep the service on a loopback-published port unless there is a clear reason not to.
+
+## artalk.yml
+
+- Prefer documenting non-secret knobs here; keep `app_key` and admin credentials out of git when possible (env override).
+- Match `locale`, `timezone`, `site_default`, `site_url`, and trusted domains to the live blog/comments hosts.
+- Do not flip `debug: true` in committed production config.
+
+## nginx
+
+- Preserve `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto` for Artalk/proxy IP trust.
+- `proxy_pass` must target the loopback port from compose.
+- Keep `server_name` equal to the public comments hostname.
+- TLS termination may live outside this file; do not invent a full certbot stack unless asked.

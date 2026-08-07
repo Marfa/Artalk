@@ -4,6 +4,11 @@
 
 # Artalk
 
+> **This fork** (`Marfa/Artalk`) runs [comments.themarfa.name](https://comments.themarfa.name). Instance deploy notes: [`deploy/README.md`](./deploy/README.md). Image builds on GitHub Actions → `ghcr.io/marfa/artalk` (not on the VPS).
+>
+> Код подготовлен с помощью Cursor.  
+> Поддержка проекта Донат https://www.donationalerts.com/r/themarfa · Донат криптой https://nowpayments.io/donation/themarfa
+
 [![npm version](https://img.shields.io/npm/v/artalk.svg?style=flat-square)](https://www.npmjs.com/package/artalk)
 [![npm downloads](https://img.shields.io/npm/dt/artalk.svg?style=flat-square)](https://www.npmjs.com/package/artalk)
 [![Docker Pulls](https://img.shields.io/docker/pulls/artalk/artalk-go?style=flat-square)](https://hub.docker.com/r/artalk/artalk-go)

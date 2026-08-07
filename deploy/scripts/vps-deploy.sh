@@ -15,6 +15,9 @@ if [[ ! -f .env ]]; then
 fi
 
 cp -a .env /tmp/artalk.env.bak
+if [[ -f .env.secrets ]]; then
+  cp -a .env.secrets /tmp/artalk.env.secrets.bak
+fi
 
 git fetch --prune origin
 git checkout "$BRANCH"
@@ -22,8 +25,12 @@ git reset --hard "origin/$BRANCH"
 
 cp -a /tmp/artalk.env.bak .env
 rm -f /tmp/artalk.env.bak
+if [[ -f /tmp/artalk.env.secrets.bak ]]; then
+  cp -a /tmp/artalk.env.secrets.bak .env.secrets
+  rm -f /tmp/artalk.env.secrets.bak
+fi
 
-# Optional: private GHCR package. Set GHCR_TOKEN (PAT with read:packages) in .env.
+# Optional: private GHCR package. Set GHCR_TOKEN in .env.secrets.
 if [[ -n "${GHCR_TOKEN:-}" ]]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-Marfa}" --password-stdin
 fi

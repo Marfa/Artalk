@@ -23,10 +23,11 @@ git clone https://github.com/Marfa/Artalk.git artalk
 mkdir -p artalk/data
 cp -a artalk.bak/data/. artalk/data/
 cp -a artalk.bak/backups artalk/backups 2>/dev/null || true
-cp deploy/.env.example .env   # from /opt/artalk after clone — edit secrets
-# Fill ATK_APP_KEY and ATK_ADMIN_USERS_0_PASSWORD from artalk.bak/docker-compose.yml
+cp deploy/.env.example .env
+cp deploy/.env.secrets.example .env.secrets
+# Fill ATK_APP_KEY and ATK_ADMIN_USERS_0_PASSWORD in .env.secrets (bcrypt `$` stays single).
+chmod 600 .env .env.secrets
 cd /opt/artalk
-# Optional: keep runtime artalk.yml secrets already in data/
 docker compose -f compose.instance.yml pull
 docker compose -f compose.instance.yml up -d --no-build
 ```
@@ -37,7 +38,10 @@ After that, every push to `master` builds on GitHub and runs `deploy/scripts/vps
 
 GitHub Actions repo secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
 
-VPS `/opt/artalk/.env`: `ATK_APP_KEY`, `ATK_ADMIN_USERS_0_PASSWORD`, optional `GHCR_TOKEN`.
+| File | Contents |
+|---|---|
+| `/opt/artalk/.env` | Non-secret Compose vars (`ARTALK_IMAGE_TAG`, site URLs) |
+| `/opt/artalk/.env.secrets` | `ATK_APP_KEY`, bcrypt admin password, optional `GHCR_TOKEN` |
 
 Telegram / SMTP and other keys stay in `/opt/artalk/data/artalk.yml` (not in git). Use `deploy/artalk.yml.example` as a reference.
 

@@ -31,6 +31,7 @@ Thumbs.db
 .swp
 .tmp
 .env
+.env.secrets
 .vscode/*.log
 .release-env
 *.suo

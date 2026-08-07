@@ -33,7 +33,6 @@ services:
 
   marfabot:
     build: ./deploy/marfabot
-    image: marfabot:local
     container_name: marfabot
     restart: unless-stopped
     depends_on:

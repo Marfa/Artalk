@@ -41,8 +41,10 @@ if [[ -n "${GHCR_TOKEN:-}" ]]; then
 fi
 
 docker compose -f "$COMPOSE_FILE" pull artalk
-docker compose -f "$COMPOSE_FILE" build marfabot
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+docker compose -f "$COMPOSE_FILE" build --pull marfabot
+docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --build marfabot
+# Ensure artalk is up with the newly pulled image (no rebuild).
+docker compose -f "$COMPOSE_FILE" up -d --no-build artalk
 
 if [[ -f deploy/scripts/backup.sh ]]; then
   install -m 755 deploy/scripts/backup.sh /usr/local/sbin/artalk-backup

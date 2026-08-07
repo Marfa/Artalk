@@ -96,8 +96,12 @@ jobs:
               echo "Run the one-time migration from deploy/README.md" >&2
               exit 1
             fi
-            set -a
-            # shellcheck disable=SC1091
-            source .env
-            set +a
-            bash deploy/scripts/vps-deploy.sh
+set -a
+# shellcheck disable=SC1091
+source .env
+if [[ -f .env.secrets ]]; then
+  # shellcheck disable=SC1091
+  source .env.secrets
+fi
+set +a
+bash deploy/scripts/vps-deploy.sh

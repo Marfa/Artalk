@@ -87,6 +87,7 @@ const en = {
   username: 'Username',
   nextStep: 'Next Step',
   skipVerify: 'Skip verification',
+  publishWithoutAuth: 'Publish without sign-in',
   logoutConfirm: 'Are you sure to logout?',
   accountMergeNotice: 'Your email has multiple accounts with different id.',
   accountMergeSelectOne: 'Please select one you want to merge all the data into it.',

@@ -91,6 +91,7 @@ export default defineLocaleExternal(
     username: 'Kullanıcı Adı',
     nextStep: 'Sonraki Adım',
     skipVerify: 'Doğrulamayı Atla',
+    publishWithoutAuth: 'Giriş yapmadan yayınla',
     logoutConfirm: 'Oturumu kapatmak istediğinizden emin misiniz?',
     accountMergeNotice: "E-postanızın farklı ID'lere sahip birden fazla hesabı var.",
     accountMergeSelectOne: 'Lütfen tüm verileri birleştirmek istediğiniz hesabı seçin.',

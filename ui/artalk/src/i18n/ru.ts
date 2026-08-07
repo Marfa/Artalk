@@ -91,6 +91,7 @@ export default defineLocaleExternal(
     username: 'Имя пользователя',
     nextStep: 'Следующий шаг',
     skipVerify: 'Пропустить проверку',
+    publishWithoutAuth: 'Опубликовать без авторизации',
     logoutConfirm: 'Вы уверены, что хотите выйти?',
     accountMergeNotice:
       'Ваша электронная почта связана с несколькими аккаунтами с разными идентификаторами.',

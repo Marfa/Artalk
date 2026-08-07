@@ -91,6 +91,7 @@ export default defineLocaleExternal(
     username: 'Nom d’utilisateur',
     nextStep: 'Étape suivante',
     skipVerify: 'Ignorer la vérification',
+    publishWithoutAuth: 'Publier sans connexion',
     logoutConfirm: 'Êtes-vous sûr de vouloir vous déconnecter ?',
     accountMergeNotice: 'Votre email a plusieurs comptes avec des identifiants différents.',
     accountMergeSelectOne:

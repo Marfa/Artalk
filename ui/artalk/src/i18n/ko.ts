@@ -91,6 +91,7 @@ export default defineLocaleExternal(
     username: '사용자 이름',
     nextStep: '다음 단계',
     skipVerify: '검증 건너뛰기',
+    publishWithoutAuth: '로그인 없이 게시',
     logoutConfirm: '로그아웃하시겠습니까?',
     accountMergeNotice: '이메일이 여러 계정과 연결되어 있습니다.',
     accountMergeSelectOne: '모든 데이터를 병합할 계정을 선택하세요.',

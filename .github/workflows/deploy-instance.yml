@@ -47,6 +47,16 @@ jobs:
             type=raw,value=instance-latest
             type=sha,prefix=sha-,format=short
 
+      - name: Resolve app version
+        id: ver
+        run: |
+          ver="$(jq -r .version ui/artalk/package.json)"
+          if [[ -z "$ver" || "$ver" == "null" ]]; then
+            echo "Could not read ui/artalk/package.json version" >&2
+            exit 1
+          fi
+          echo "version=v${ver}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -58,7 +68,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             TZ=Europe/Madrid
-            APP_VERSION=instance
+            APP_VERSION=${{ steps.ver.outputs.version }}
             APP_COMMIT_HASH=${{ github.sha }}
           cache-from: type=gha,scope=artalk-instance-amd64
           cache-to: type=gha,mode=max,scope=artalk-instance-amd64

@@ -77,25 +77,19 @@ jobs:
           cache-from: type=gha,scope=artalk-instance-amd64
           cache-to: type=gha,mode=max,scope=artalk-instance-amd64
 
-      - name: Make package public
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api --method PUT \
-            -H "Accept: application/vnd.github+json" \
-            "/user/packages/container/${IMAGE_NAME##*/}/visibility" \
-            -f visibility=public || true
-
   deploy:
     name: Pull on VPS
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.repository_owner }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -103,6 +97,7 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 20m
+          envs: GHCR_TOKEN,GHCR_USER
           script: |
             set -euo pipefail
             cd /opt/artalk
@@ -111,4 +106,6 @@ jobs:
               echo "Run the one-time migration from deploy/README.md" >&2
               exit 1
             fi
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
             bash deploy/scripts/vps-deploy.sh

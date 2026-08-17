@@ -30,12 +30,13 @@ if [[ -f /tmp/artalk.env.secrets.bak ]]; then
   rm -f /tmp/artalk.env.secrets.bak
 fi
 
-# Optional private GHCR: read token without `source` (bcrypt `$` must not expand).
-if [[ -f .env.secrets ]]; then
+# Prefer GHCR_TOKEN already in the environment (Actions). Else read .env.secrets
+# without `source` so bcrypt `$` in other keys is not expanded.
+if [[ -z "${GHCR_TOKEN:-}" && -f .env.secrets ]]; then
   GHCR_TOKEN="$(grep -E '^GHCR_TOKEN=' .env.secrets | head -1 | cut -d= -f2- || true)"
   GHCR_USER="$(grep -E '^GHCR_USER=' .env.secrets | head -1 | cut -d= -f2- || true)"
-  GHCR_USER="${GHCR_USER:-Marfa}"
 fi
+GHCR_USER="${GHCR_USER:-Marfa}"
 if [[ -n "${GHCR_TOKEN:-}" ]]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 fi

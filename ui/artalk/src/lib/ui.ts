@@ -97,7 +97,7 @@ export function showNotify(wrapElem: HTMLElement, msg: string, type: NotifyLevel
     `<div class="atk-notify atk-fade-in" style="background-color: ${colors[type]}"><span class="atk-notify-content"></span></div>`,
   )
   const notifyContentEl = notifyElem.querySelector<HTMLElement>('.atk-notify-content')!
-  notifyContentEl.innerHTML = Utils.htmlEncode(msg).replace('\n', '<br/>')
+  notifyContentEl.innerHTML = Utils.htmlEncode(msg).replace(/\n/g, '<br/>')
 
   wrapElem.appendChild(notifyElem)
 

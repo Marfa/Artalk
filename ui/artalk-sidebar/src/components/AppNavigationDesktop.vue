@@ -7,7 +7,7 @@ import { useNavigationMenu } from './AppNavigationMenu'
 const nav = useNavigationMenu()
 const { t } = useI18n()
 
-const getIconCSSAttribute = (icon: string) => `url('${icon.replace(/'/g, "\\'")}')`
+const getIconCSSAttribute = (icon: string) => `url(${JSON.stringify(icon)})`
 </script>
 
 <template>

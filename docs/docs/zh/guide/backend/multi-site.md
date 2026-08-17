@@ -49,7 +49,7 @@ admin_users:
 - **name** & **email**：用户名和邮箱，**不区分大小写**。
 - **password**：用户密码。
 
-  支持 bcrypt 和 md5 加密，例如填写：`"(md5)50c21190c6e4e5418c6a90d2b5031119"`。
+  支持 bcrypt 加密，例如填写：`"(bcrypt)$2y$10$ti4vZYIrxVN8rLcYXVgXCO.GJND0dyI49r7IoF3xqIx8bBRmIBZRm"`。
 
   **建议使用更安全的 bcrypt 加密算法**，在 Linux 环境下，你可以使用 [htpasswd 命令](https://httpd.apache.org/docs/2.4/programs/htpasswd.html) 来生成密文：
 

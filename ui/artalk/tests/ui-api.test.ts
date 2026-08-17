@@ -5,7 +5,7 @@ import type { ArtalkPlugin, Config } from '@/types'
 const InitConf = {
   pageTitle: 'Artalk DEMO',
   pageKey: '/unit_test_page.html?test=1',
-  server: 'http://localhost:3000/api',
+  server: 'https://localhost:3000/api',
   site: 'Unit Test Page',
   darkMode: true,
 }
@@ -33,7 +33,7 @@ const networkLifecyclePlugin = createLifecyclePlugin(networkPluginInitConf, netw
 
 beforeAll(() => {
   const loadedPluginScript = document.createElement('script')
-  loadedPluginScript.src = 'http://localhost:3000/plugin.js'
+  loadedPluginScript.src = 'https://localhost:3000/plugin.js'
   document.head.appendChild(loadedPluginScript)
   window.ArtalkPlugins = { lifecycle: networkLifecyclePlugin }
 

@@ -104,7 +104,7 @@ ssl:
 # --
 # - name: "admin"
 #   email: "admin@example.com"
-#   password: "" # 支持 bcrypt 或 md5 加密，如："(bcrypt)$2y$10$ti4vZYIrxVN8rLcYXVgXCO.GJND0dyI49r7IoF3xqIx8bBRmIBZRm"
+#   password: "" # 支持 bcrypt 加密，如："(bcrypt)$2y$10$ti4vZYIrxVN8rLcYXVgXCO.GJND0dyI49r7IoF3xqIx8bBRmIBZRm"
 #   badge_name: "管理员"
 #   badge_color: "#0083FF"
 # --

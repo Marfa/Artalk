@@ -47,7 +47,7 @@ Explanation of each configuration item:
 - **name** & **email**: Username and email, **case-insensitive**.
 - **password**: User password.
 
-  Supports bcrypt and md5 encryption. For example, you can specify: `"(md5)50c21190c6e4e5418c6a90d2b5031119"`.
+  Supports bcrypt encryption. For example, you can specify: `"(bcrypt)$2y$10$ti4vZYIrxVN8rLcYXVgXCO.GJND0dyI49r7IoF3xqIx8bBRmIBZRm"`.
 
   **Using the more secure bcrypt encryption algorithm is recommended**. In a Linux environment, you can use the [htpasswd command](https://httpd.apache.org/docs/2.4/programs/htpasswd.html) to generate the encrypted password:
 

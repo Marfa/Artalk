@@ -1,9 +1,7 @@
 package entity
 
 import (
-	"crypto/md5"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
@@ -55,17 +53,11 @@ func (u *User) CheckPassword(input string) bool {
 	}
 
 	const BcryptPrefix = "(bcrypt)"
-	const MD5Prefix = "(md5)"
 
 	switch {
 	case strings.HasPrefix(password, BcryptPrefix):
 		if err := bcrypt.CompareHashAndPassword([]byte(password[len(BcryptPrefix):]),
 			[]byte(input)); err == nil {
-			return true
-		}
-	case strings.HasPrefix(password, MD5Prefix):
-		if strings.EqualFold(password[len(MD5Prefix):],
-			fmt.Sprintf("%x", md5.Sum([]byte(input)))) {
 			return true
 		}
 	default:

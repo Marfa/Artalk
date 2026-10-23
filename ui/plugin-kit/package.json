@@ -59,7 +59,7 @@
   "devDependencies": {
     "artalk": "workspace:^",
     "tsdown": "^0.22.13",
-    "vite": "^8.1.5"
+    "vite": "^8.1.6"
   },
   "peerDependencies": {
     "artalk": "^2.10.0",

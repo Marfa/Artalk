@@ -64,6 +64,12 @@ export class List implements IList {
           : (this.opts.getConf().get().flatMode as boolean),
       // flatMode must be boolean because it had been handled when Artalk.init
       createCommentNode: (d, r) => {
+        // Re-import / race without clear must not create a second DOM node for the same id
+        const existing = this.commentNodes.find((c) => c.getID() === d.id)
+        if (existing) {
+          existing.setData(d)
+          return existing
+        }
         const node = createCommentNode({ forceFlatMode, ...this.opts }, d, r)
         this.commentNodes.push(node) // store node instance
         return node

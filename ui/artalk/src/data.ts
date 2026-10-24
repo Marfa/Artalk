@@ -78,10 +78,9 @@ export class DataManager implements IDataManager {
   }
 
   updateComment(comment: CommentData) {
-    this.comments = this.comments.map((c) => {
-      if (c.id === comment.id) return comment
-      return c
-    })
+    const idx = this.comments.findIndex((c) => c.id === comment.id)
+    if (idx >= 0) this.comments[idx] = comment
+    else this.comments.push(comment)
 
     this.events.trigger('comment-updated', comment)
     this.events.trigger('list-loaded', this.comments)

@@ -26,6 +26,9 @@ export function createCommentNode(
     onDelete: (c: CommentNode) => {
       opts.getData().deleteComment(c.getID())
     },
+    onUpdate: (c: CommentData) => {
+      opts.getData().updateComment(c)
+    },
 
     replyTo: replyComment,
 

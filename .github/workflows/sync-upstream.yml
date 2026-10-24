@@ -1,0 +1,98 @@
+name: Sync upstream Artalk
+
+# Opens a PR into master when ArtalkJS/Artalk has new commits.
+# Never pushes to master — review and merge the PR to build + deploy.
+
+on:
+  schedule:
+    # Monday 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Upstream branch or tag to merge (e.g. master, v2.10.0)
+        required: true
+        default: master
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Open upstream sync PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Push the bot-managed sync branch
+      pull-requests: write # Create or update the sync PR
+    env:
+      UPSTREAM_REPO: https://github.com/ArtalkJS/Artalk.git
+      SYNC_BRANCH: chore/upstream-latest
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: master
+
+      - name: Configure git
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+
+      - name: Merge upstream and open PR
+        env:
+          UPSTREAM_REF: ${{ inputs.upstream_ref || 'master' }}
+        run: |
+          set -euo pipefail
+
+          git remote add upstream "$UPSTREAM_REPO"
+          git fetch --no-tags upstream "$UPSTREAM_REF"
+          UPSTREAM_SHA="$(git rev-parse "FETCH_HEAD")"
+          echo "upstream $UPSTREAM_REF @ $UPSTREAM_SHA"
+
+          if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
+            echo "master already contains upstream/$UPSTREAM_REF — nothing to do"
+            if gh pr view "$SYNC_BRANCH" --json state --jq .state 2>/dev/null | grep -qx OPEN; then
+              gh pr close "$SYNC_BRANCH" --comment "Closing: master already contains upstream/\`$UPSTREAM_REF\` ($UPSTREAM_SHA)."
+            fi
+            exit 0
+          fi
+
+          git checkout -B "$SYNC_BRANCH"
+          if ! git merge --no-ff "$UPSTREAM_SHA" -m "Merge upstream Artalk $UPSTREAM_REF"; then
+            echo "::error::Merge conflict with upstream/$UPSTREAM_REF ($UPSTREAM_SHA). Resolve locally, then push a PR."
+            git merge --abort || true
+            exit 1
+          fi
+
+          VERSION="$(jq -r .version ui/artalk/package.json)"
+          git push -u origin "HEAD:$SYNC_BRANCH" --force-with-lease
+
+          BODY="$(printf '%s\n' \
+            '## Summary' \
+            "Automated sync from [ArtalkJS/Artalk](https://github.com/ArtalkJS/Artalk) \`${UPSTREAM_REF}\` (\`${UPSTREAM_SHA}\`)." \
+            '' \
+            "- Artalk version in tree: **${VERSION}**" \
+            '- Target branch: `master` (merge this PR to build + deploy instance)' \
+            '' \
+            '## Test plan' \
+            '- [ ] CI green on this PR' \
+            '- [ ] Skim upstream commits for breaking changes' \
+            '- [ ] Merge → confirm `Deploy instance` succeeds')"
+
+          if gh pr view "$SYNC_BRANCH" --json state --jq .state 2>/dev/null | grep -qx OPEN; then
+            gh pr edit "$SYNC_BRANCH" --title "chore: sync upstream Artalk ${VERSION}" --body "$BODY"
+            echo "Updated existing PR for $SYNC_BRANCH"
+          else
+            gh pr create --base master --head "$SYNC_BRANCH" \
+              --title "chore: sync upstream Artalk ${VERSION}" \
+              --body "$BODY"
+          fi

@@ -122,10 +122,10 @@ func CommentUpdate(app *core.App, router fiber.Router) {
 			comment.IsPending = p.IsPending
 
 			// 待审状态被修改为 false，则重新发送邮件通知
+			// Best-effort: notify failure must not block approve/save
 			if !comment.IsPending {
 				if err := renotifyWhenPendingModified(app, &comment); err != nil {
 					log.Error("[RenotifyWhenPendingModified] error: ", err)
-					return common.RespError(c, 500, "Renotify Err: "+err.Error())
 				}
 			}
 		}

@@ -68,7 +68,15 @@ class TelegramClient:
         }
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
-        return self._call("editMessageText", payload)
+        try:
+            return self._call("editMessageText", payload)
+        except TelegramError as e:
+            # Approve/toggle with identical text+keyboard is still success for the bot
+            if "message is not modified" in (e.body or "").lower() or "message is not modified" in str(
+                e
+            ).lower():
+                return {}
+            raise
 
     def answer_callback_query(self, callback_query_id: str, text: str = "") -> None:
         self._call("answerCallbackQuery", {"callback_query_id": callback_query_id, "text": text})

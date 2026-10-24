@@ -56,9 +56,29 @@ def merge_flags(cached: dict[str, Any], live: dict[str, Any]) -> dict[str, Any]:
         out["email"] = cached["email"]
     if cached.get("content_raw"):
         out["content_raw"] = cached["content_raw"]
+    elif live.get("content") and not out.get("content_raw"):
+        # GET CookedComment.content is raw markdown (webhook content may be HTML)
+        out["content_raw"] = live["content"]
     if cached.get("nick") and not out.get("nick"):
         out["nick"] = cached["nick"]
     return out
+
+
+def raw_content(comment: dict[str, Any]) -> str:
+    """Body for PUT /comments — never send webhook HTML `content` when raw exists."""
+    raw = comment.get("content_raw")
+    if raw is not None and str(raw) != "":
+        return str(raw)
+    return str(comment.get("content") or "")
+
+
+def format_callback_error(err: BaseException) -> str:
+    """Short Telegram callback toast (max ~180 chars)."""
+    parts = [f"Ошибка: {err}"]
+    if isinstance(err, ArtalkError) and err.body:
+        parts.append(err.body.strip()[:120])
+    msg = " | ".join(parts)
+    return msg[:180]
 
 
 class App:
@@ -138,7 +158,7 @@ class App:
 
     def _put_flags(self, comment: dict[str, Any], **flags: bool) -> dict[str, Any]:
         payload = {
-            "content": comment.get("content_raw") or comment.get("content") or "",
+            "content": raw_content(comment),
             "page_key": comment.get("page_key") or "",
             "site_name": comment.get("site_name") or "",
             "rid": int(comment.get("rid") or 0),
@@ -149,6 +169,8 @@ class App:
             "email": comment.get("email") or "",
             "link": comment.get("link") or "",
         }
+        if not payload["content"]:
+            raise ArtalkError("comment missing content for update")
         if not payload["page_key"] or not payload["site_name"]:
             raise ArtalkError("comment missing page_key/site_name for update")
         updated = self.artalk.update_comment(int(comment["id"]), payload)
@@ -267,8 +289,10 @@ class App:
             self.tg.answer_callback_query(cq["id"], tip)
         except (ArtalkError, TelegramError, ValueError, KeyError) as e:
             log.exception("callback failed")
+            if isinstance(e, ArtalkError):
+                log.error("Artalk error status=%s body=%s", e.status, e.body)
             try:
-                self.tg.answer_callback_query(cq["id"], f"Ошибка: {e}"[:180])
+                self.tg.answer_callback_query(cq["id"], format_callback_error(e))
             except TelegramError:
                 pass
 

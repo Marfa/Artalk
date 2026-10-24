@@ -63,8 +63,9 @@ export default class CommentActions {
       .then((res) => {
         btnElem.setLoading(false)
 
-        // 刷新当前 Comment UI
-        this.comment.setData(res.data)
+        // Sync via DataManager so list state and DOM stay on one comment-updated path
+        if (this.opts.onUpdate) this.opts.onUpdate(res.data)
+        else this.comment.setData(res.data)
       })
       .catch((err) => {
         console.error(err)

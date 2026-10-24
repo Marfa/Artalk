@@ -12,6 +12,7 @@ export interface CommentOptions {
   // Hooks
   onAfterRender?: () => void
   onDelete?: (c: CommentNode) => void
+  onUpdate?: (c: CommentData) => void
 
   /** The comment being replied to (linked comment) */
   replyTo?: CommentData

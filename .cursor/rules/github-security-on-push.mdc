@@ -1,0 +1,70 @@
+---
+description: Before every git push to Marfa/Artalk, triage open PRs and GitHub security surfaces and fix or dismiss them
+alwaysApply: true
+---
+
+# GitHub security triage on push (Marfa/Artalk)
+
+Before **every `git push`** to `origin` for this repo, check and handle open items on:
+
+| Surface | URL |
+|---|---|
+| Pull requests | https://github.com/Marfa/Artalk/pulls |
+| Malware | https://github.com/Marfa/Artalk/security/malware |
+| Dependabot | https://github.com/Marfa/Artalk/security/dependabot |
+| Code scanning | https://github.com/Marfa/Artalk/security/code-scanning |
+| Secret scanning | https://github.com/Marfa/Artalk/security/secret-scanning |
+
+Prefer `gh` over scraping HTML.
+
+## Checklist (run, then act)
+
+```bash
+gh pr list --repo Marfa/Artalk --state open
+gh api repos/Marfa/Artalk/dependabot/alerts --paginate --jq '[.[] | select(.state=="open")]'
+gh api repos/Marfa/Artalk/code-scanning/alerts?state=open
+gh api repos/Marfa/Artalk/secret-scanning/alerts?state=open
+```
+
+Malware: open the malware security URL (or matching API if available). Treat HTTP 404 / empty as “nothing open or feature not enabled” — say so in the response, do not invent alerts.
+
+If code/secret scanning returns 404, the feature is off or inaccessible — report that once; do not block the push solely for that.
+
+## How to handle
+
+### Dependabot PRs (`pulls`)
+
+- CI green + mergeable patch/security bump → merge (`gh pr merge --merge` or `--squash` matching repo default).
+- Conflicts or red CI → rebase/fix locally, push branch, recheck, then merge.
+- Superseded by a broader local bump → close with a short comment pointing at the fixing commit.
+
+### Dependabot alerts
+
+- Patched version exists → bump direct dep and/or add `pnpm.overrides` for transitive packages, refresh `pnpm-lock.yaml`, commit.
+- Advisory **withdrawn** or clearly inaccurate (no fixed version, GHSA withdrawn) → dismiss via API with `inaccurate` (or `not_used` when the package is not reachable at runtime for this app).
+- Do not dismiss high/critical reachable vulns as `tolerable_risk` without stating residual risk to the user.
+
+### Code scanning
+
+- True positive in our code → fix in the same push when possible.
+- False positive / wontfix → dismiss with reason in GitHub; note in the response.
+
+### Secret scanning
+
+- Real secret → rotate immediately, remove from git history if needed, never “fix” by only deleting the line without rotation.
+- False positive → mark as false positive in GitHub.
+
+### Malware
+
+- Open malware findings → quarantine/remove the offending dependency or file; do not push until cleared or explicitly waived by the user with residual risk named.
+
+## Response before push
+
+In chat, briefly report: open counts per surface, what was fixed/merged/dismissed, and anything left open with why.
+
+## Invariants
+
+- Never paste real secrets from alerts into chat or commits.
+- Prefer env/`ATK_*` over committing credentials.
+- Do not rewrite `exports/` in place while remediating.
+- This is a fork of ArtalkJS/Artalk — do not add Marfa donation/Cursor README blocks here.

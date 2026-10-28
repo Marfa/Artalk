@@ -83,9 +83,6 @@ jobs:
           VERSION="$(jq -r .version ui/artalk/package.json)"
           git push -u origin "HEAD:$SYNC_BRANCH" --force-with-lease
 
-          # Brief pause: GitHub can race right after force-push ("No commits between…").
-          sleep 3
-
           BODY=$(cat <<EOF
           ## Summary
           Automated sync from [ArtalkJS/Artalk](https://github.com/ArtalkJS/Artalk) \`${UPSTREAM_REF}\` (\`${UPSTREAM_SHA}\`).
@@ -103,10 +100,24 @@ jobs:
           BODY="$(printf '%s\n' "$BODY" | sed 's/^[[:space:]]*//')"
 
           TITLE="chore: sync upstream Artalk ${VERSION}"
-          EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
-          if [ -n "$EXISTING" ]; then
-            gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
-            echo "Updated existing PR #${EXISTING}"
-          else
-            gh pr create --base master --head "$SYNC_BRANCH" --title "$TITLE" --body "$BODY"
-          fi
+
+          # After force-push GitHub compare/PR APIs can lag ("No commits between…").
+          # Prefer edit when a PR already exists; retry create with backoff.
+          for attempt in 1 2 3 4 5 6; do
+            EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
+            if [ -z "$EXISTING" ]; then
+              EXISTING="$(gh pr view "$SYNC_BRANCH" --json number --jq .number 2>/dev/null || true)"
+            fi
+            if [ -n "$EXISTING" ]; then
+              gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
+              echo "Updated existing PR #${EXISTING}"
+              exit 0
+            fi
+            if gh pr create --base master --head "$SYNC_BRANCH" --title "$TITLE" --body "$BODY"; then
+              exit 0
+            fi
+            echo "PR create/list race (attempt ${attempt}/6); sleeping…"
+            sleep 5
+          done
+          echo "::error::Could not create or update sync PR for ${SYNC_BRANCH}"
+          exit 1

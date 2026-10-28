@@ -15,6 +15,8 @@ on:
         default: master
         type: string
 
+# GITHUB_TOKEN cannot push .github/workflows/ or (with this repo's settings)
+# createPullRequest. Classic PAT (repo + workflow) does both.
 permissions: {}
 
 concurrency:
@@ -25,18 +27,12 @@ jobs:
   sync:
     name: Open upstream sync PR
     runs-on: ubuntu-latest
-    # GITHUB_TOKEN cannot push .github/workflows/ changes. PAT pushes the branch;
-    # GITHUB_TOKEN owns gh pr create/edit (PAT list/create was empty/"no commits").
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     env:
       UPSTREAM_REPO: https://github.com/ArtalkJS/Artalk.git
       SYNC_BRANCH: chore/upstream-latest
-      # PAT: classic repo + workflow — used only for git push
-      SYNC_GIT_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
-      # Actions app token — used for gh pr *
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,15 +44,14 @@ jobs:
       - name: Configure git
         run: |
           set -euo pipefail
-          if [ -z "${SYNC_GIT_TOKEN:-}" ]; then
-            echo "::error::Missing repo secret UPSTREAM_SYNC_TOKEN (classic PAT: repo + workflow). GITHUB_TOKEN cannot push workflow file updates from upstream."
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Missing repo secret UPSTREAM_SYNC_TOKEN (classic PAT: repo + workflow)."
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Authenticate git push with PAT; leave GH_TOKEN as GITHUB_TOKEN for gh pr.
-          BASIC="$(printf 'x-access-token:%s' "$SYNC_GIT_TOKEN" | base64 | tr -d '\n')"
-          git config http.https://github.com/.extraheader "AUTHORIZATION: basic ${BASIC}"
+          gh auth setup-git
+          echo "gh auth: $(gh auth status 2>&1 | tr '\n' ' ' | head -c 200)"
 
       - name: Merge upstream and open PR
         env:
@@ -70,8 +65,9 @@ jobs:
           echo "upstream $UPSTREAM_REF @ $UPSTREAM_SHA"
 
           find_sync_pr() {
-            gh pr list --base master --state open --limit 50 --json number,headRefName \
-              --jq ".[] | select(.headRefName == \"${SYNC_BRANCH}\") | .number" | head -n1
+            # Avoid `gh pr list --head` (unreliable with user PATs) and `head` (SIGPIPE + pipefail).
+            gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=master&per_page=50" \
+              --jq "[.[] | select(.head.ref == \"${SYNC_BRANCH}\") | .number][0] // empty"
           }
 
           if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
@@ -93,6 +89,7 @@ jobs:
           VERSION="$(jq -r .version ui/artalk/package.json)"
           EXISTING="$(find_sync_pr)"
           echo "Existing sync PR: ${EXISTING:-none}"
+          echo "Open PRs (debug): $(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=10" --jq '[.[] | {n:.number, head:.head.ref}]')"
 
           git push -u origin "HEAD:$SYNC_BRANCH" --force-with-lease
 
@@ -110,7 +107,6 @@ jobs:
           EOF
           )
           BODY="$(printf '%s\n' "$BODY" | sed 's/^[[:space:]]*//')"
-
           TITLE="chore: sync upstream Artalk ${VERSION}"
 
           if [ -n "$EXISTING" ]; then
@@ -119,13 +115,20 @@ jobs:
             exit 0
           fi
 
-          # Brief pause: compare API can lag right after force-push.
-          sleep 5
+          # Wait until compare sees commits (force-push lag → "No commits between…").
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            AHEAD="$(gh api "repos/${GITHUB_REPOSITORY}/compare/master...${SYNC_BRANCH}" --jq '.ahead_by // 0')"
+            echo "compare master...${SYNC_BRANCH} ahead_by=${AHEAD} (attempt ${attempt})"
+            if [ "${AHEAD}" -gt 0 ]; then
+              break
+            fi
+            sleep 3
+          done
+
           for attempt in 1 2 3 4 5 6; do
             if gh pr create --base master --head "$SYNC_BRANCH" --title "$TITLE" --body "$BODY"; then
               exit 0
             fi
-            # PR may already exist if discovery missed it
             EXISTING="$(find_sync_pr)"
             if [ -n "$EXISTING" ]; then
               gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"

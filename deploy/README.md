@@ -42,7 +42,7 @@ GitHub Actions repo secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `UPSTREAM_SY
 | Secret | Purpose |
 |---|---|
 | `VPS_HOST` / `VPS_USER` / `VPS_SSH_KEY` | Deploy instance over SSH |
-| `UPSTREAM_SYNC_TOKEN` | Classic PAT (`repo` + `workflow`) for [Sync upstream Artalk](../.github/workflows/sync-upstream.yml) — `GITHUB_TOKEN` cannot push `.github/workflows/` changes |
+| `UPSTREAM_SYNC_TOKEN` | Classic PAT with **both** `repo` and `workflow` for [Sync upstream Artalk](../.github/workflows/sync-upstream.yml). `workflow` alone can push workflow files but cannot list/create PRs; `GITHUB_TOKEN` cannot push `.github/workflows/` |
 
 | File | Contents |
 |---|---|

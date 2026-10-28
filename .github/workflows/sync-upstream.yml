@@ -66,8 +66,9 @@ jobs:
 
           if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
             echo "master already contains upstream/$UPSTREAM_REF — nothing to do"
-            if gh pr view "$SYNC_BRANCH" --json state --jq .state 2>/dev/null | grep -qx OPEN; then
-              gh pr close "$SYNC_BRANCH" --comment "Closing: master already contains upstream/\`$UPSTREAM_REF\` ($UPSTREAM_SHA)."
+            EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
+            if [ -n "$EXISTING" ]; then
+              gh pr close "$EXISTING" --comment "Closing: master already contains upstream/${UPSTREAM_REF} (${UPSTREAM_SHA})."
             fi
             exit 0
           fi
@@ -82,23 +83,30 @@ jobs:
           VERSION="$(jq -r .version ui/artalk/package.json)"
           git push -u origin "HEAD:$SYNC_BRANCH" --force-with-lease
 
-          BODY="$(printf '%s\n' \
-            '## Summary' \
-            "Automated sync from [ArtalkJS/Artalk](https://github.com/ArtalkJS/Artalk) \`${UPSTREAM_REF}\` (\`${UPSTREAM_SHA}\`)." \
-            '' \
-            "- Artalk version in tree: **${VERSION}**" \
-            '- Target branch: `master` (merge this PR to build + deploy instance)' \
-            '' \
-            '## Test plan' \
-            '- [ ] CI green on this PR' \
-            '- [ ] Skim upstream commits for breaking changes' \
-            '- [ ] Merge → confirm `Deploy instance` succeeds')"
+          # Brief pause: GitHub can race right after force-push ("No commits between…").
+          sleep 3
 
-          if gh pr view "$SYNC_BRANCH" --json state --jq .state 2>/dev/null | grep -qx OPEN; then
-            gh pr edit "$SYNC_BRANCH" --title "chore: sync upstream Artalk ${VERSION}" --body "$BODY"
-            echo "Updated existing PR for $SYNC_BRANCH"
+          BODY=$(cat <<EOF
+          ## Summary
+          Automated sync from [ArtalkJS/Artalk](https://github.com/ArtalkJS/Artalk) \`${UPSTREAM_REF}\` (\`${UPSTREAM_SHA}\`).
+
+          - Artalk version in tree: **${VERSION}**
+          - Target branch: \`master\` (merge this PR to build + deploy instance)
+
+          ## Test plan
+          - [ ] CI green on this PR
+          - [ ] Skim upstream commits for breaking changes
+          - [ ] Merge → confirm \`Deploy instance\` succeeds
+          EOF
+          )
+          # Strip leading indentation from the heredoc above
+          BODY="$(printf '%s\n' "$BODY" | sed 's/^[[:space:]]*//')"
+
+          TITLE="chore: sync upstream Artalk ${VERSION}"
+          EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
+            echo "Updated existing PR #${EXISTING}"
           else
-            gh pr create --base master --head "$SYNC_BRANCH" \
-              --title "chore: sync upstream Artalk ${VERSION}" \
-              --body "$BODY"
+            gh pr create --base master --head "$SYNC_BRANCH" --title "$TITLE" --body "$BODY"
           fi

@@ -25,15 +25,18 @@ jobs:
   sync:
     name: Open upstream sync PR
     runs-on: ubuntu-latest
-    # GITHUB_TOKEN cannot push changes under .github/workflows/ (no workflows
-    # permission on the Actions app). Use a classic PAT with repo + workflow.
+    # GITHUB_TOKEN cannot push .github/workflows/ changes. PAT pushes the branch;
+    # GITHUB_TOKEN owns gh pr create/edit (PAT list/create was empty/"no commits").
     permissions:
       contents: read
       pull-requests: write
     env:
       UPSTREAM_REPO: https://github.com/ArtalkJS/Artalk.git
       SYNC_BRANCH: chore/upstream-latest
-      GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+      # PAT: classic repo + workflow — used only for git push
+      SYNC_GIT_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+      # Actions app token — used for gh pr *
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,13 +48,15 @@ jobs:
       - name: Configure git
         run: |
           set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
+          if [ -z "${SYNC_GIT_TOKEN:-}" ]; then
             echo "::error::Missing repo secret UPSTREAM_SYNC_TOKEN (classic PAT: repo + workflow). GITHUB_TOKEN cannot push workflow file updates from upstream."
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          gh auth setup-git
+          # Authenticate git push with PAT; leave GH_TOKEN as GITHUB_TOKEN for gh pr.
+          BASIC="$(printf 'x-access-token:%s' "$SYNC_GIT_TOKEN" | base64 | tr -d '\n')"
+          git config http.https://github.com/.extraheader "AUTHORIZATION: basic ${BASIC}"
 
       - name: Merge upstream and open PR
         env:
@@ -64,7 +69,6 @@ jobs:
           UPSTREAM_SHA="$(git rev-parse "FETCH_HEAD")"
           echo "upstream $UPSTREAM_REF @ $UPSTREAM_SHA"
 
-          # --head filter is unreliable with a user PAT in Actions; match headRefName.
           find_sync_pr() {
             gh pr list --base master --state open --limit 50 --json number,headRefName \
               --jq ".[] | select(.headRefName == \"${SYNC_BRANCH}\") | .number" | head -n1
@@ -87,7 +91,6 @@ jobs:
           fi
 
           VERSION="$(jq -r .version ui/artalk/package.json)"
-          # Capture PR number before force-push — compare/create APIs lag afterward.
           EXISTING="$(find_sync_pr)"
           echo "Existing sync PR: ${EXISTING:-none}"
 
@@ -106,26 +109,27 @@ jobs:
           - [ ] Merge → confirm \`Deploy instance\` succeeds
           EOF
           )
-          # Strip leading indentation from the heredoc above
           BODY="$(printf '%s\n' "$BODY" | sed 's/^[[:space:]]*//')"
 
           TITLE="chore: sync upstream Artalk ${VERSION}"
 
           if [ -n "$EXISTING" ]; then
-            for attempt in 1 2 3 4 5 6; do
-              if gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"; then
-                echo "Updated existing PR #${EXISTING}"
-                exit 0
-              fi
-              echo "PR edit race (attempt ${attempt}/6); sleeping…"
-              sleep 5
-            done
-            echo "::error::Could not update sync PR #${EXISTING}"
-            exit 1
+            gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
+            echo "Updated existing PR #${EXISTING}"
+            exit 0
           fi
 
+          # Brief pause: compare API can lag right after force-push.
+          sleep 5
           for attempt in 1 2 3 4 5 6; do
             if gh pr create --base master --head "$SYNC_BRANCH" --title "$TITLE" --body "$BODY"; then
+              exit 0
+            fi
+            # PR may already exist if discovery missed it
+            EXISTING="$(find_sync_pr)"
+            if [ -n "$EXISTING" ]; then
+              gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
+              echo "Updated existing PR #${EXISTING}"
               exit 0
             fi
             echo "PR create race (attempt ${attempt}/6); sleeping…"

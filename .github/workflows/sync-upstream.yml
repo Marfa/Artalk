@@ -51,7 +51,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           gh auth setup-git
-          echo "gh auth: $(gh auth status 2>&1 | tr '\n' ' ' | head -c 200)"
 
       - name: Merge upstream and open PR
         env:
@@ -74,7 +73,10 @@ jobs:
             echo "master already contains upstream/$UPSTREAM_REF — nothing to do"
             EXISTING="$(find_sync_pr)"
             if [ -n "$EXISTING" ]; then
-              gh pr close "$EXISTING" --comment "Closing: master already contains upstream/${UPSTREAM_REF} (${UPSTREAM_SHA})."
+              # REST avoids gh GraphQL fields that need read:org on the PAT.
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${EXISTING}" -f state=closed
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${EXISTING}/comments" \
+                -f body="Closing: master already contains upstream/\`${UPSTREAM_REF}\` (${UPSTREAM_SHA})."
             fi
             exit 0
           fi
@@ -89,7 +91,6 @@ jobs:
           VERSION="$(jq -r .version ui/artalk/package.json)"
           EXISTING="$(find_sync_pr)"
           echo "Existing sync PR: ${EXISTING:-none}"
-          echo "Open PRs (debug): $(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=10" --jq '[.[] | {n:.number, head:.head.ref}]')"
 
           git push -u origin "HEAD:$SYNC_BRANCH" --force-with-lease
 
@@ -109,13 +110,14 @@ jobs:
           BODY="$(printf '%s\n' "$BODY" | sed 's/^[[:space:]]*//')"
           TITLE="chore: sync upstream Artalk ${VERSION}"
 
+          # REST avoids `gh pr` GraphQL fields that need read:org on the PAT.
           if [ -n "$EXISTING" ]; then
-            gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${EXISTING}" \
+              -f title="$TITLE" -f body="$BODY" >/dev/null
             echo "Updated existing PR #${EXISTING}"
             exit 0
           fi
 
-          # Wait until compare sees commits (force-push lag → "No commits between…").
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             AHEAD="$(gh api "repos/${GITHUB_REPOSITORY}/compare/master...${SYNC_BRANCH}" --jq '.ahead_by // 0')"
             echo "compare master...${SYNC_BRANCH} ahead_by=${AHEAD} (attempt ${attempt})"
@@ -126,12 +128,16 @@ jobs:
           done
 
           for attempt in 1 2 3 4 5 6; do
-            if gh pr create --base master --head "$SYNC_BRANCH" --title "$TITLE" --body "$BODY"; then
+            if URL="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+              -f title="$TITLE" -f body="$BODY" -f head="$SYNC_BRANCH" -f base=master \
+              --jq .html_url)"; then
+              echo "Created PR: ${URL}"
               exit 0
             fi
             EXISTING="$(find_sync_pr)"
             if [ -n "$EXISTING" ]; then
-              gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${EXISTING}" \
+                -f title="$TITLE" -f body="$BODY" >/dev/null
               echo "Updated existing PR #${EXISTING}"
               exit 0
             fi

@@ -64,9 +64,15 @@ jobs:
           UPSTREAM_SHA="$(git rev-parse "FETCH_HEAD")"
           echo "upstream $UPSTREAM_REF @ $UPSTREAM_SHA"
 
+          # --head filter is unreliable with a user PAT in Actions; match headRefName.
+          find_sync_pr() {
+            gh pr list --base master --state open --limit 50 --json number,headRefName \
+              --jq ".[] | select(.headRefName == \"${SYNC_BRANCH}\") | .number" | head -n1
+          }
+
           if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
             echo "master already contains upstream/$UPSTREAM_REF — nothing to do"
-            EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
+            EXISTING="$(find_sync_pr)"
             if [ -n "$EXISTING" ]; then
               gh pr close "$EXISTING" --comment "Closing: master already contains upstream/${UPSTREAM_REF} (${UPSTREAM_SHA})."
             fi
@@ -81,8 +87,9 @@ jobs:
           fi
 
           VERSION="$(jq -r .version ui/artalk/package.json)"
-          # Capture PR number before force-push — GitHub compare/list APIs lag afterward.
-          EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          # Capture PR number before force-push — compare/create APIs lag afterward.
+          EXISTING="$(find_sync_pr)"
+          echo "Existing sync PR: ${EXISTING:-none}"
 
           git push -u origin "HEAD:$SYNC_BRANCH" --force-with-lease
 

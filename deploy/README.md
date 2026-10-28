@@ -37,7 +37,12 @@ After that, every push to `master` builds on GitHub and runs `deploy/scripts/vps
 
 ## Secrets
 
-GitHub Actions repo secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
+GitHub Actions repo secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `UPSTREAM_SYNC_TOKEN`.
+
+| Secret | Purpose |
+|---|---|
+| `VPS_HOST` / `VPS_USER` / `VPS_SSH_KEY` | Deploy instance over SSH |
+| `UPSTREAM_SYNC_TOKEN` | Classic PAT (`repo` + `workflow`) for [Sync upstream Artalk](../.github/workflows/sync-upstream.yml) — `GITHUB_TOKEN` cannot push `.github/workflows/` changes |
 
 | File | Contents |
 |---|---|

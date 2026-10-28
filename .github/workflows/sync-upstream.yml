@@ -25,13 +25,15 @@ jobs:
   sync:
     name: Open upstream sync PR
     runs-on: ubuntu-latest
+    # GITHUB_TOKEN cannot push changes under .github/workflows/ (no workflows
+    # permission on the Actions app). Use a classic PAT with repo + workflow.
     permissions:
-      contents: write # Push the bot-managed sync branch
-      pull-requests: write # Create or update the sync PR
+      contents: read
+      pull-requests: write
     env:
       UPSTREAM_REPO: https://github.com/ArtalkJS/Artalk.git
       SYNC_BRANCH: chore/upstream-latest
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,6 +45,10 @@ jobs:
       - name: Configure git
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Missing repo secret UPSTREAM_SYNC_TOKEN (classic PAT: repo + workflow). GITHUB_TOKEN cannot push workflow file updates from upstream."
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           gh auth setup-git

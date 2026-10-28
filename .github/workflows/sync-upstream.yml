@@ -81,6 +81,9 @@ jobs:
           fi
 
           VERSION="$(jq -r .version ui/artalk/package.json)"
+          # Capture PR number before force-push — GitHub compare/list APIs lag afterward.
+          EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
+
           git push -u origin "HEAD:$SYNC_BRANCH" --force-with-lease
 
           BODY=$(cat <<EOF
@@ -101,23 +104,25 @@ jobs:
 
           TITLE="chore: sync upstream Artalk ${VERSION}"
 
-          # After force-push GitHub compare/PR APIs can lag ("No commits between…").
-          # Prefer edit when a PR already exists; retry create with backoff.
+          if [ -n "$EXISTING" ]; then
+            for attempt in 1 2 3 4 5 6; do
+              if gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"; then
+                echo "Updated existing PR #${EXISTING}"
+                exit 0
+              fi
+              echo "PR edit race (attempt ${attempt}/6); sleeping…"
+              sleep 5
+            done
+            echo "::error::Could not update sync PR #${EXISTING}"
+            exit 1
+          fi
+
           for attempt in 1 2 3 4 5 6; do
-            EXISTING="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')"
-            if [ -z "$EXISTING" ]; then
-              EXISTING="$(gh pr view "$SYNC_BRANCH" --json number --jq .number 2>/dev/null || true)"
-            fi
-            if [ -n "$EXISTING" ]; then
-              gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
-              echo "Updated existing PR #${EXISTING}"
-              exit 0
-            fi
             if gh pr create --base master --head "$SYNC_BRANCH" --title "$TITLE" --body "$BODY"; then
               exit 0
             fi
-            echo "PR create/list race (attempt ${attempt}/6); sleeping…"
+            echo "PR create race (attempt ${attempt}/6); sleeping…"
             sleep 5
           done
-          echo "::error::Could not create or update sync PR for ${SYNC_BRANCH}"
+          echo "::error::Could not create sync PR for ${SYNC_BRANCH}"
           exit 1

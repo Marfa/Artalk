@@ -10,7 +10,7 @@ app_key: ""
 # Debug mode
 debug: false
 
-# Language (follow Unicode BCP 47) ["en", "zh-CN", "zh-TW", "ja", "fr", "ko", "ru", "tr"]
+# Language (follow Unicode BCP 47) ["en", "zh-CN", "zh-TW", "ja", "fr", "ko", "ru", "tr", "pt-PT"]
 # -- see https://www.techonthenet.com/js/language_tags.php --
 locale: en
 
@@ -319,6 +319,8 @@ auth:
     enabled: false
     client_id: ""
     client_secret: ""
+    # Server URL (leave empty for https://gitea.com; supports ports and subpaths)
+    site_url: ""
   # Google
   google:
     enabled: false

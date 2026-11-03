@@ -91,6 +91,7 @@ export default defineLocaleExternal(
     username: 'Utilizador',
     nextStep: 'Próximo passo',
     skipVerify: 'Saltar verificação',
+    publishWithoutAuth: 'Publicar sem iniciar sessão',
     logoutConfirm: 'Tens a certeza que queres sair?',
     accountMergeNotice: 'O teu email tem várias contas com IDs diferentes.',
     accountMergeSelectOne: 'Seleciona a conta onde queres juntar todos os dados.',

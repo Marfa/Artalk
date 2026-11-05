@@ -22,7 +22,7 @@ overrides:
   baseline-browser-mapping: 2.11.0
   fast-uri: 3.1.9
   seroval: 1.6.11
-  minimatch@10: 11.0.1
+  minimatch@10: 10.2.5
   '@vue/server-renderer': 3.5.42
   vue: 3.5.42
   katex: 0.18.2
@@ -1048,9 +1048,6 @@ packages:
   '@intlify/shared@11.4.14':
     resolution: {integrity: sha512-f8zSlPs4+Yd9za3CPQfW9OHxAJBOeRQzB/hhOhkbGA7hlqWk0W0bUtSV/LmyrGNwdl8JriBnFtJqZyF140bjGg==}
     engines: {node: '>= 22'}
-
-  '@isaacs/nonrecursive-glob-match@1.0.3':
-    resolution: {integrity: sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -3946,8 +3943,8 @@ packages:
     engines: {node: '>=4'}
     hasBin: true
 
-  minimatch@11.0.1:
-    resolution: {integrity: sha512-t+Vn6DX4wPCxS23y03C0uhF7S1jpi1GfqPrnlEipCJaA2ykiNbMkVlDutZtmvLfRcUN6R8AYVlzTsQrT4RZoLQ==}
+  minimatch@10.2.5:
+    resolution: {integrity: sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==}
     engines: {node: 18 || 20 || >=22}
 
   minimatch@3.1.5:
@@ -5972,7 +5969,7 @@ snapshots:
     dependencies:
       '@eslint/object-schema': 3.0.5
       debug: 4.4.3
-      minimatch: 11.0.1
+      minimatch: 10.2.5
     transitivePeerDependencies:
       - supports-color
 
@@ -6100,8 +6097,6 @@ snapshots:
 
   '@intlify/shared@11.4.14': {}
 
-  '@isaacs/nonrecursive-glob-match@1.0.3': {}
-
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -6148,7 +6143,7 @@ snapshots:
       '@rushstack/terminal': 0.24.2(@types/node@25.9.5)
       '@rushstack/ts-command-line': 5.3.12(@types/node@25.9.5)
       diff: 8.0.4
-      minimatch: 11.0.1
+      minimatch: 10.2.5
       resolve: 1.22.12
       semver: 7.7.4
       source-map: 0.6.1
@@ -6936,7 +6931,7 @@ snapshots:
       '@typescript-eslint/types': 8.65.0
       '@typescript-eslint/visitor-keys': 8.65.0
       debug: 4.4.3
-      minimatch: 11.0.1
+      minimatch: 10.2.5
       semver: 7.7.4
       tinyglobby: 0.2.16
       ts-api-utils: 2.5.0(typescript@6.0.3)
@@ -8037,7 +8032,7 @@ snapshots:
       eslint: 10.7.0(jiti@2.6.1)
       eslint-import-context: 0.1.9(unrs-resolver@1.11.1)
       is-glob: 4.0.3
-      minimatch: 11.0.1
+      minimatch: 10.2.5
       semver: 7.7.4
       stable-hash-x: 0.2.0
       unrs-resolver: 1.11.1
@@ -8167,7 +8162,7 @@ snapshots:
       imurmurhash: 0.1.4
       is-glob: 4.0.3
       json-stable-stringify-without-jsonify: 1.0.1
-      minimatch: 11.0.1
+      minimatch: 10.2.5
       natural-compare: 1.4.0
       optionator: 0.9.4
     optionalDependencies:
@@ -8962,9 +8957,8 @@ snapshots:
   mime@1.6.0:
     optional: true
 
-  minimatch@11.0.1:
+  minimatch@10.2.5:
     dependencies:
-      '@isaacs/nonrecursive-glob-match': 1.0.3
       brace-expansion: 5.0.12
 
   minimatch@3.1.5:
@@ -10032,7 +10026,7 @@ snapshots:
       '@gerrit0/mini-shiki': 3.23.0
       lunr: 2.3.9
       markdown-it: 14.3.3
-      minimatch: 11.0.1
+      minimatch: 10.2.5
       typescript: 6.0.3
       yaml: 2.9.0
 

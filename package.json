@@ -87,7 +87,7 @@
       "browserslist": "4.28.7",
       "baseline-browser-mapping": "2.11.0",
       "fast-uri": "3.1.9",
-      "seroval": "1.6.3",
+      "seroval": "1.6.11",
       "@vue/server-renderer": "3.5.42",
       "vue": "3.5.42",
       "katex": "0.18.2"

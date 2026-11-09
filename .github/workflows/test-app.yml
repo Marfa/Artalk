@@ -37,86 +37,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_database:
-    name: Test database compatibility
+  # Marfa instance: Linux AMD64 + SQLite only. Upstream also runs macOS/ARM and
+  # Postgres/MySQL/MSSQL matrix; those are out of scope for this fork.
+  test_app:
+    name: Test Go (Linux AMD64)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    # Disposable databases; these passwords are local test credentials only.
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: ArtalkTestOnly123
-          POSTGRES_DB: artalk_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 20
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: ArtalkTestOnly123
-          MYSQL_DATABASE: artalk_test
-        ports: ["3306:3306"]
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -pArtalkTestOnly123"
-          --health-interval 5s --health-timeout 5s --health-retries 20
-      sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        env:
-          ACCEPT_EULA: Y
-          MSSQL_PID: Developer
-          MSSQL_SA_PASSWORD: ArtalkTestOnly123
-        ports: ["1433:1433"]
-        options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P ArtalkTestOnly123 -Q 'SELECT 1'"
-          --health-interval 5s --health-timeout 5s --health-retries 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: PostgreSQL
-        env:
-          ARTALK_TEST_DB_TYPE: pgsql
-          ARTALK_TEST_DB_DSN: host=127.0.0.1 port=5432 user=postgres password=ArtalkTestOnly123 dbname=artalk_test sslmode=disable
-        run: go test ./server/handler -run '^TestDatabaseCompatibility$' -count=1 -v
-      - name: MySQL
-        if: ${{ !cancelled() }}
-        env:
-          ARTALK_TEST_DB_TYPE: mysql
-          ARTALK_TEST_DB_DSN: root:ArtalkTestOnly123@tcp(127.0.0.1:3306)/artalk_test?charset=utf8mb4&parseTime=True&loc=UTC
-        run: go test ./server/handler -run '^TestDatabaseCompatibility$' -count=1 -v
-      - name: SQL Server
-        if: ${{ !cancelled() }}
-        env:
-          ARTALK_TEST_DB_TYPE: mssql
-          ARTALK_TEST_DB_DSN: sqlserver://sa:ArtalkTestOnly123@127.0.0.1:1433?database=master&encrypt=disable
-        run: go test ./server/handler -run '^TestDatabaseCompatibility$' -count=1 -v
-
-  test_app:
-    name: Test Go (${{ matrix.name }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux AMD64
-            runner: ubuntu-24.04
-            artifact: linux-amd64
-            coverage: true
-          - name: Linux ARM64
-            runner: ubuntu-24.04-arm
-            artifact: linux-arm64
-            coverage: false
-          - name: macOS
-            runner: macos-latest
-            artifact: macos
-            coverage: false
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -167,13 +93,13 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Go-Test-Results-${{ matrix.artifact }}
+          name: Go-Test-Results-linux-amd64
           path: ${{ env.REPORT_DIR }}
 
-      - if: ${{ matrix.coverage && !cancelled() }}
+      - if: ${{ !cancelled() }}
         name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           flags: go
-          file: ${{ env.REPORT_DIR }}/coverage.out
+          files: ${{ env.REPORT_DIR }}/coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}

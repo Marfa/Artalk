@@ -9,6 +9,9 @@ import $t from '@/i18n'
 import type { CommentData, Config, Context } from '@/types'
 
 export interface CommentOptions {
+  /** @internal */
+  renderMarkdown?: (src: string) => string
+
   // Hooks
   onAfterRender?: () => void
   onDelete?: (c: CommentNode) => void
@@ -46,6 +49,7 @@ export default class CommentNode {
 
   private parent: CommentNode | null
   private children: CommentNode[] = []
+  private removed = false
 
   private nestCurt: number // 当前嵌套层数
 
@@ -63,6 +67,7 @@ export default class CommentNode {
 
   /** 渲染 UI */
   public render() {
+    if (this.removed) return
     const newEl = this.renderInstance.render()
 
     if (this.$el) this.$el.replaceWith(newEl)
@@ -198,7 +203,14 @@ export default class CommentNode {
    * Remove the comment node
    */
   remove() {
+    this.removed = true
+    this.renderInstance.dispose()
     this.$el?.remove()
+  }
+
+  /** @internal */
+  isRemoved() {
+    return this.removed
   }
 
   /** 获取 Gravatar 头像 URL */
@@ -210,9 +222,12 @@ export default class CommentNode {
     })
   }
 
+  /** @internal */
+  renderMarkdown = (src: string) => (this.opts.renderMarkdown || marked)(src)
+
   /** 获取评论 markdown 解析后的内容 */
   public getContentMarked() {
-    return marked(this.data.content)
+    return this.renderMarkdown(this.data.content)
   }
 
   /** 获取格式化后的日期 */

@@ -1,0 +1,796 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { version as artalkVersion } from '../package.json'
+import { bindApi, comment, deferred, list, mockApi, response, version } from './lib/api'
+import Artalk from '@/artalk'
+import { GlobalPlugins, mount } from '@/mount'
+import $t from '@/i18n'
+import type { ArtalkPlugin, ConfigPartial } from '@/types'
+
+const instances: Artalk[] = []
+const innerText = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerText')
+
+beforeEach(() => {
+  localStorage.clear()
+  // jsdom lacks innerText, which is used for button labels and HTML encoding.
+  Object.defineProperty(HTMLElement.prototype, 'innerText', {
+    configurable: true,
+    get() {
+      return this.textContent
+    },
+    set(value) {
+      this.textContent = value
+    },
+  })
+  vi.spyOn(window, 'scroll').mockImplementation(() => {})
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      throw new Error('Unexpected HTTP request')
+    }),
+  )
+})
+
+afterEach(() => {
+  instances.splice(0).forEach((instance) => instance.destroy())
+  document.body.replaceChildren()
+  if (innerText) Object.defineProperty(HTMLElement.prototype, 'innerText', innerText)
+  else delete (HTMLElement.prototype as any).innerText
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+async function initialize(api = mockApi(), options: ConfigPartial = {}) {
+  const el = document.createElement('div')
+  document.body.append(el)
+  const conf = {
+    el,
+    server: 'https://example.com',
+    site: 'Test',
+    pageKey: '/',
+    locale: 'en',
+    emoticons: false as const,
+    ...options,
+  }
+  const artalk = new Artalk(conf)
+  instances.push(artalk)
+  bindApi(artalk.ctx, api)
+  artalk.on('created', () =>
+    artalk.ctx.getUser().update({ name: 'Visitor', email: 'visitor@example.com' }),
+  )
+  await mount(conf, artalk.ctx)
+  await vi.waitFor(() => expect(artalk.ctx.getData().getLoading()).toBe(false))
+  return artalk
+}
+
+describe('existing API and plugin compatibility', () => {
+  it('uses the existing API for built-in features and public plugins', async () => {
+    const api = mockApi()
+    vi.mocked(api.comments.getComments).mockResolvedValue(response(list([comment(1)])))
+    const plugin: ArtalkPlugin = (ctx) => {
+      ctx.on('mounted', () => {
+        void ctx.getApi().comments.getComment(42)
+      })
+    }
+    Artalk.use(plugin)
+    try {
+      const artalk = await initialize(api, { listSort: true })
+      expect(api.conf.conf).toHaveBeenCalledTimes(1)
+      expect(api.comments.getComments).toHaveBeenCalledTimes(1)
+      expect(api.comments.getComment).toHaveBeenCalledWith(42)
+      expect(api.notifies.getNotifies).toHaveBeenCalledWith({
+        name: 'Visitor',
+        email: 'visitor@example.com',
+      })
+      expect(artalk.getEl().textContent).toContain('Comment 1')
+      expect(artalk.ctx.inject('editor').getUI().$header.style.display).toBe('')
+      expect(artalk.getEl().querySelector('.atk-dropdown')).not.toBeNull()
+      expect(fetch).not.toHaveBeenCalled()
+    } finally {
+      GlobalPlugins.delete(plugin)
+    }
+  })
+
+  it('submits and replies with the original fields and event bridge', async () => {
+    const api = mockApi()
+    const artalk = await initialize(api)
+    const submitted = vi.fn()
+    artalk.on('editor-submitted', submitted)
+    const editor = artalk.ctx.inject('editor')
+    editor.setContent('Hello')
+    editor.submit()
+    await vi.waitFor(() => expect(artalk.ctx.getComments()).toHaveLength(1))
+    expect(api.comments.createComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Hello',
+        rid: 0,
+        name: 'Visitor',
+        email: 'visitor@example.com',
+        page_key: '/',
+        site_name: 'Test',
+      }),
+    )
+    expect(submitted).toHaveBeenCalledTimes(1)
+
+    artalk.update({ preview: false })
+    const first = artalk.ctx.getCommentNodes()[0]
+    artalk.ctx.replyComment(first.getData(), first.getEl())
+    editor.setContent('Reply')
+    editor.submit()
+    await vi.waitFor(() => expect(artalk.ctx.getComments()).toHaveLength(2))
+    expect(api.comments.createComment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'Reply', rid: 1, page_key: '/', site_name: 'Test' }),
+    )
+    expect(submitted).toHaveBeenCalledTimes(2)
+  })
+
+  it('retains administrator controls and comment fields when editing', async () => {
+    const api = mockApi()
+    const original = {
+      ...comment(1),
+      nick: 'Author',
+      email: 'author@example.com',
+      link: 'https://author.example',
+      is_pending: true,
+      is_pinned: true,
+    }
+    vi.mocked(api.comments.getComments).mockResolvedValue(response(list([original])))
+    const artalk = await initialize(api)
+    const listEl = artalk.ctx.inject('list').getEl()
+    // The sidebar moves this list outside the widget's original root.
+    const sidebar = document.createElement('section')
+    document.body.append(sidebar)
+    sidebar.append(listEl)
+    artalk.reload()
+    await vi.waitFor(() => expect(api.comments.getComments).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(artalk.ctx.getData().getLoading()).toBe(false))
+    const controls = () => [...listEl.querySelectorAll('.atk-comment [atk-only-admin-show]')]
+    expect(controls()).toHaveLength(5)
+    expect(controls().every((el) => el.classList.contains('atk-hide'))).toBe(true)
+    artalk.ctx.getUser().update({ is_admin: true, token: 'admin-token' })
+    expect(controls().every((el) => !el.classList.contains('atk-hide'))).toBe(true)
+    artalk.ctx.editComment(original, artalk.ctx.getCommentNodes()[0].getEl())
+    const editor = artalk.ctx.inject('editor')
+    editor.setContent('Edited')
+    // Existing plugins can edit author fields through the editor UI.
+    editor.getUI().$name.value = 'Corrected author'
+    editor.submit()
+    await vi.waitFor(() => expect(artalk.ctx.getComments()[0].content).toBe('Edited'))
+    expect(api.comments.updateComment).toHaveBeenCalledWith(1, {
+      ...original,
+      content: 'Edited',
+      nick: 'Corrected author',
+    })
+    expect(editor.getUI().$header.style.display).toBe('')
+    expect(editor.getUI().$name.value).toBe('Visitor')
+    artalk.ctx.getUser().logout()
+    expect(controls().every((el) => el.classList.contains('atk-hide'))).toBe(true)
+  })
+
+  it('preserves actions added by plugins when the viewer changes', async () => {
+    const api = mockApi()
+    vi.mocked(api.comments.getComments).mockResolvedValue(response(list([comment(1)])))
+    const artalk = await initialize(api)
+    const actions = artalk.getEl().querySelector('.atk-actions')!
+    const button = document.createElement('button')
+    const clicked = vi.fn()
+    button.textContent = 'Plugin action'
+    button.addEventListener('click', clicked)
+    actions.append(button)
+    const count = actions.querySelectorAll('.atk-common-action-btn').length
+    artalk.ctx.getUser().update({ token: 'signed-in', is_admin: true })
+    expect(actions.contains(button)).toBe(true)
+    expect(actions.querySelectorAll('.atk-common-action-btn')).toHaveLength(count)
+    button.click()
+    expect(clicked).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps moderation fields, votes, and the delete confirmation', async () => {
+    const api = mockApi()
+    vi.mocked(api.comments.getComments).mockResolvedValue(
+      response(list([{ ...comment(1), is_pending: true, is_pinned: true }])),
+    )
+    const artalk = await initialize(api)
+    artalk.ctx.getUser().update({ is_admin: true, token: 'admin-token' })
+    const node = artalk.ctx.getCommentNodes()[0]
+    const action = (label: string) =>
+      [...node.getEl().querySelectorAll<HTMLElement>('.atk-common-action-btn')].find(
+        (button) => button.innerText === label,
+      )!
+    const original = { ...node.getData() }
+    action($t('pending')).click()
+    await vi.waitFor(() => expect(node.getData().is_pending).toBe(false))
+    expect(api.comments.updateComment).toHaveBeenCalledWith(1, { ...original, is_pending: false })
+    expect(node.getData().is_pinned).toBe(true)
+
+    node.getRender().voteBtnUp!.$el.click()
+    await vi.waitFor(() => expect(node.getData().vote_up).toBe(1))
+    expect(api.votes.createVote).toHaveBeenCalledWith('comment', 1, 'up', {
+      name: 'Visitor',
+      email: 'visitor@example.com',
+    })
+
+    const remove = action($t('delete'))
+    remove.click()
+    expect(api.comments.deleteComment).not.toHaveBeenCalled()
+    remove.click()
+    await vi.waitFor(() => expect(artalk.ctx.getCommentNodes()).toHaveLength(0))
+    expect(api.comments.deleteComment).toHaveBeenCalledExactlyOnceWith(1)
+  })
+
+  it('waits for a vote before accepting another choice, including after a rerender', async () => {
+    const api = mockApi()
+    const pending = deferred<Awaited<ReturnType<typeof api.votes.createVote>>>()
+    vi.mocked(api.comments.getComments).mockResolvedValue(response(list([comment(1)])))
+    vi.mocked(api.votes.createVote).mockReturnValueOnce(pending.promise)
+    const artalk = await initialize(api, { voteDown: true })
+    const node = artalk.ctx.getCommentNodes()[0]
+    const up = node.getRender().voteBtnUp!
+    up.$el.click()
+    expect(up.isLoading).toBe(true)
+    expect(up.$el.textContent).toContain($t('loading'))
+    up.$el.click()
+    node.getRender().voteBtnDown!.$el.click()
+    artalk.update({ locale: 'zh-CN' })
+    node.getRender().voteBtnUp!.$el.click()
+    expect(api.votes.createVote).toHaveBeenCalledTimes(1)
+
+    pending.resolve(response({ up: 1, down: 0, is_up: true, is_down: false }))
+    await vi.waitFor(() => expect(node.getData().vote_up).toBe(1))
+    expect(node.getRender().voteBtnUp!.$el.textContent).toContain('(1)')
+    expect(node.getRender().voteBtnUp!.isLoading).toBe(false)
+    node.getRender().voteBtnDown!.$el.click()
+    expect(api.votes.createVote).toHaveBeenCalledTimes(2)
+    expect(api.votes.createVote).toHaveBeenLastCalledWith('comment', 1, 'down', expect.anything())
+  })
+
+  it('allows retrying a failed vote and ignores its response after the comment is removed', async () => {
+    const api = mockApi()
+    const pending = deferred<Awaited<ReturnType<typeof api.votes.createVote>>>()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(api.comments.getComments).mockResolvedValue(response(list([comment(1)])))
+    vi.mocked(api.votes.createVote)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockReturnValueOnce(pending.promise)
+    const artalk = await initialize(api)
+    const node = artalk.ctx.getCommentNodes()[0]
+    const up = node.getRender().voteBtnUp!
+    up.$el.click()
+    await vi.waitFor(() => expect(up.$el.textContent).toBe($t('voteFail')))
+    expect(up.isLoading).toBe(false)
+    up.$el.click() // Dismiss the inline message.
+    up.$el.click()
+    expect(api.votes.createVote).toHaveBeenCalledTimes(2)
+    artalk.update({ pageKey: '/next' })
+    pending.resolve(response({ up: 1, down: 0, is_up: true, is_down: false }))
+    await pending.promise
+    await Promise.resolve()
+    expect(node.getData().vote_up).toBe(0)
+    expect(artalk.ctx.getCommentNodes()).toHaveLength(0)
+  })
+
+  it('ignores a moderation response after the comment is removed', async () => {
+    const api = mockApi()
+    const pending = deferred<Awaited<ReturnType<typeof api.comments.updateComment>>>()
+    vi.mocked(api.comments.getComments).mockResolvedValue(response(list([comment(1)])))
+    vi.mocked(api.comments.updateComment).mockReturnValue(pending.promise)
+    const artalk = await initialize(api)
+    artalk.ctx.getUser().update({ is_admin: true, token: 'admin-token' })
+    const node = artalk.ctx.getCommentNodes()[0]
+    const pin = [...node.getEl().querySelectorAll<HTMLElement>('.atk-common-action-btn')].find(
+      (button) => button.innerText === $t('pin'),
+    )!
+    pin.click()
+    expect(api.comments.updateComment).toHaveBeenCalledTimes(1)
+    artalk.update({ pageKey: '/next' })
+    expect(node.isRemoved()).toBe(true)
+    const update = vi.spyOn(node, 'setData')
+    pending.resolve(response({ ...comment(1), is_pinned: true }))
+    await pending.promise
+    await Promise.resolve()
+    expect(update).not.toHaveBeenCalled()
+    expect(artalk.ctx.getCommentNodes()).toHaveLength(0)
+  })
+
+  it('uses a custom uploader and returns to the API when it is removed', async () => {
+    const api = mockApi()
+    const artalk = await initialize(api, { imgUpload: true })
+    const editor = artalk.ctx.inject('editor')
+    const uploader = vi.fn(async () => 'https://example.com/image.png')
+    const file = new File(['image'], 'image.png', { type: 'image/png' })
+    const drop = () => {
+      const event = new Event('drop', { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'dataTransfer', { value: { files: [file] } })
+      editor.getUI().$textarea.dispatchEvent(event)
+    }
+    artalk.update({ imgUploader: uploader })
+    drop()
+    await vi.waitFor(() =>
+      expect(editor.getContentRaw()).toContain('![](https://example.com/image.png)'),
+    )
+    expect(uploader).toHaveBeenCalledWith(file)
+    expect(api.upload.upload).not.toHaveBeenCalled()
+    artalk.update({ imgUploader: undefined })
+    drop()
+    await vi.waitFor(() =>
+      expect(editor.getContentRaw()).toContain('![](https://example.com/upload.png)'),
+    )
+    expect(api.upload.upload).toHaveBeenCalledWith({ file })
+    expect(uploader).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps separate API calls and comments for each widget', async () => {
+    const firstApi = mockApi()
+    const secondApi = mockApi()
+    vi.mocked(firstApi.comments.getComments).mockResolvedValue(
+      response(list([comment(1, 'First widget')])),
+    )
+    vi.mocked(secondApi.comments.getComments).mockResolvedValue(
+      response(list([comment(2, 'Second widget')])),
+    )
+    const first = await initialize(firstApi)
+    const second = await initialize(secondApi)
+    expect(first.getEl().textContent).toContain('First widget')
+    expect(first.getEl().textContent).not.toContain('Second widget')
+    expect(second.getEl().textContent).toContain('Second widget')
+    first.reload()
+    await vi.waitFor(() => expect(firstApi.comments.getComments).toHaveBeenCalledTimes(2))
+    expect(secondApi.comments.getComments).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads initial notifications and discards them after the destination changes', async () => {
+    const api = mockApi()
+    const initial = deferred<Awaited<ReturnType<typeof api.notifies.getNotifies>>>()
+    const stale = deferred<Awaited<ReturnType<typeof api.notifies.getNotifies>>>()
+    vi.mocked(api.notifies.getNotifies)
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(stale.promise)
+    const artalk = await initialize(api)
+    const update = vi.spyOn(artalk.ctx.getData(), 'updateNotifies')
+    initial.resolve(response({ notifies: [], count: 0 }))
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    update.mockClear()
+    artalk.reload()
+    artalk.update({ pageKey: '/next' })
+    expect(update).toHaveBeenCalledWith([])
+    update.mockClear()
+    stale.resolve(response({ notifies: [], count: 0 }))
+    await stale.promise
+    await Promise.resolve()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('clears old notifications without a request when profile fields are empty', async () => {
+    const api = mockApi()
+    const artalk = await initialize(api)
+    artalk.ctx.getData().updateNotifies([
+      {
+        id: 1,
+        comment_id: 1,
+        user_id: 1,
+        is_read: false,
+        is_emailed: false,
+        read_link: '/',
+      },
+    ])
+    artalk.ctx.getUser().update({ name: '', email: '' })
+    artalk.reload()
+    expect(artalk.ctx.getData().getNotifies()).toEqual([])
+    expect(api.notifies.getNotifies).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['account', 'destroy', 'website'] as const)(
+    'checks the notification scope after a %s change',
+    async (change) => {
+      const api = mockApi()
+      const pending = deferred<Awaited<ReturnType<typeof api.notifies.getNotifies>>>()
+      vi.mocked(api.notifies.getNotifies).mockReturnValue(pending.promise)
+      const artalk = await initialize(api)
+      const update = vi.spyOn(artalk.ctx.getData(), 'updateNotifies')
+      if (change === 'account') artalk.ctx.getUser().update({ token: 'another-viewer' })
+      else if (change === 'destroy') artalk.destroy()
+      else artalk.ctx.getUser().update({ link: 'https://example.com/about' })
+      pending.resolve(response({ notifies: [], count: 0 }))
+      await pending.promise
+      await Promise.resolve()
+      expect(update).toHaveBeenCalledTimes(change === 'website' ? 1 : 0)
+    },
+  )
+
+  it('appends more comments and replaces them on reload', async () => {
+    const api = mockApi()
+    vi.mocked(api.comments.getComments).mockImplementation(async ({ offset = 0 }) =>
+      response({ ...list([comment(offset + 1)]), count: 2, roots_count: 2 }),
+    )
+    const artalk = await initialize(api, { pagination: { pageSize: 1, readMore: true } })
+    await artalk.ctx.inject('comments').load({ offset: 1 })
+    expect(artalk.ctx.getComments().map((item) => item.id)).toEqual([1, 2])
+    expect(artalk.ctx.getCommentNodes()).toHaveLength(2)
+    await artalk.ctx.inject('comments').load()
+    expect(artalk.ctx.getComments().map((item) => item.id)).toEqual([1])
+    expect(artalk.ctx.getCommentNodes()).toHaveLength(1)
+  })
+
+  it('keeps loaded comments after a load-more failure and retries the same page', async () => {
+    const api = mockApi()
+    vi.mocked(api.comments.getComments).mockImplementation(async ({ offset = 0 }) =>
+      response({ ...list([comment(offset + 1)]), count: 3, roots_count: 3 }),
+    )
+    const artalk = await initialize(api, {
+      pagination: { pageSize: 1, readMore: true, autoLoad: true },
+    })
+    let button = artalk.getEl().querySelector<HTMLElement>('.atk-list-read-more')!
+    vi.mocked(api.comments.getComments).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    await artalk.ctx.inject('comments').load({ offset: 1 })
+    expect(artalk.ctx.getCommentNodes().map((node) => node.getID())).toEqual([1])
+    expect(artalk.getEl().querySelector('.atk-error-layer')).toBeNull()
+    expect(button.textContent).toContain($t('listRetry'))
+    expect(button.classList.contains('atk-err')).toBe(true)
+
+    artalk.update({ locale: 'zh-CN' })
+    button = artalk.getEl().querySelector<HTMLElement>('.atk-list-read-more')!
+    expect(button.style.display).toBe('')
+    expect(button.textContent).toContain($t('listRetry'))
+    artalk.ctx.trigger('list-reach-bottom')
+    expect(api.comments.getComments).toHaveBeenCalledTimes(2)
+    button.click()
+    await vi.waitFor(() => expect(artalk.ctx.getCommentNodes()).toHaveLength(2))
+    expect(api.comments.getComments).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 1 }),
+      expect.anything(),
+    )
+    expect(button.classList.contains('atk-err')).toBe(false)
+    expect(button.textContent).toContain($t('loadMore'))
+
+    artalk.ctx.trigger('list-reach-bottom')
+    await vi.waitFor(() => expect(artalk.ctx.getCommentNodes()).toHaveLength(3))
+  })
+
+  it.each([true, false])(
+    'keeps a retry dialog when no comments remain (readMore: %s)',
+    async (readMore) => {
+      const api = mockApi()
+      vi.mocked(api.comments.getComments).mockResolvedValue(
+        response({ ...list([comment(1)]), count: 2, roots_count: 2 }),
+      )
+      const artalk = await initialize(api, { pagination: { pageSize: 1, readMore } })
+      vi.mocked(api.comments.getComments).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      await artalk.ctx.inject('comments').load({ offset: readMore ? 0 : 1 })
+      expect(artalk.ctx.getCommentNodes()).toHaveLength(0)
+      const retry = artalk.getEl().querySelector<HTMLElement>('.atk-error-retry')!
+      expect(retry).not.toBeNull()
+      retry.click()
+      await vi.waitFor(() => expect(artalk.ctx.getCommentNodes()).toHaveLength(1))
+      expect(artalk.getEl().querySelector('.atk-error-layer')).toBeNull()
+    },
+  )
+
+  it.each(['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.'])(
+    'shows a readable network error for "%s" and keeps diagnostics in the console',
+    async (message) => {
+      const api = mockApi()
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const artalk = await initialize(api)
+      vi.mocked(api.comments.getComments).mockRejectedValueOnce(new TypeError(message))
+      await artalk.ctx.inject('comments').load()
+      expect(artalk.getEl().querySelector('.error-message')?.textContent).toBe($t('reqAborted'))
+      expect(log).toHaveBeenCalledWith(`TypeError: ${message}`)
+
+      vi.mocked(api.comments.getComments).mockRejectedValueOnce({
+        msg: 'Comments are closed on this page.',
+        data: { message: 'Comments are closed on this page.' },
+      })
+      await artalk.ctx.inject('comments').load()
+      expect(artalk.getEl().querySelector('.error-message')?.textContent).toBe(
+        'Comments are closed on this page.',
+      )
+    },
+  )
+
+  it('keeps sorting through the original list parameter hook', async () => {
+    const api = mockApi()
+    const artalk = await initialize(api, { listSort: true })
+    artalk.update({ locale: 'zh-CN' })
+    expect(artalk.getEl().querySelectorAll('.atk-dropdown')).toHaveLength(1)
+    artalk.getEl().querySelectorAll<HTMLElement>('.atk-dropdown-item span')[1].click()
+    await vi.waitFor(() => expect(api.comments.getComments).toHaveBeenCalledTimes(2))
+    expect(api.comments.getComments).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort_by: 'vote' }),
+      expect.anything(),
+    )
+    const params = {}
+    artalk.getConf().listFetchParamsModifier!(params)
+    expect(params).toEqual({ sort_by: 'vote' })
+  })
+
+  it('replaces numbered pages, bounds page input, and cancels pending input on destroy', async () => {
+    const api = mockApi()
+    vi.mocked(api.comments.getComments).mockImplementation(async ({ offset = 0 }) =>
+      response({ ...list([comment(offset + 1)]), count: 3, roots_count: 3 }),
+    )
+    const artalk = await initialize(api, { pagination: { pageSize: 1, readMore: false } })
+    const root = artalk.getEl()
+    const input = root.querySelector<HTMLInputElement>('.atk-pagination input')!
+    root.querySelector<HTMLElement>('.atk-btn-prev')!.click()
+    expect(api.comments.getComments).toHaveBeenCalledTimes(1)
+    root.querySelector<HTMLElement>('.atk-btn-next')!.click()
+    await vi.waitFor(() => expect(artalk.ctx.getComments().map((item) => item.id)).toEqual([2]))
+    expect(input.value).toBe('2')
+
+    for (const value of ['1.5', 'Infinity', '-1', 'text', '']) {
+      input.value = value
+      input.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 13 }))
+      expect(input.value).toBe('2')
+      expect(api.comments.getComments).toHaveBeenCalledTimes(2)
+    }
+
+    input.value = '99'
+    input.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 13 }))
+    await vi.waitFor(() => expect(artalk.ctx.getComments().map((item) => item.id)).toEqual([3]))
+    expect(input.value).toBe('3')
+    root.querySelector<HTMLElement>('.atk-btn-next')!.click()
+    expect(api.comments.getComments).toHaveBeenCalledTimes(3)
+
+    vi.useFakeTimers()
+    try {
+      input.value = '2'
+      input.dispatchEvent(new Event('input'))
+      artalk.ctx.getData().clearComments()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(api.comments.getComments).toHaveBeenCalledTimes(3)
+      input.value = '1'
+      input.dispatchEvent(new Event('input'))
+      artalk.destroy()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(api.comments.getComments).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('inserts native and OwO emoticons without changing shared pack data', async () => {
+    const packs = [
+      { name: 'Emoji', type: 'emoji', items: [{ val: '🙂' }] },
+      {
+        Pictures: {
+          type: 'image',
+          container: [{ icon: '<img src="https://example.com/smile.png">', text: 'smile' }],
+        },
+      },
+    ]
+    const original = JSON.stringify(packs)
+    const artalk = await initialize(mockApi(), { emoticons: packs })
+    const root = artalk.getEl()
+    root.querySelector<HTMLElement>('[aria-label="Emoji"]')!.click()
+    await vi.waitFor(() =>
+      expect(
+        [...root.querySelectorAll('.atk-grp')].map((group) => group.getAttribute('data-grp-name')),
+      ).toEqual(['Emoji', 'Pictures']),
+    )
+    root.querySelector<HTMLElement>('.atk-grp[data-index="0"] .atk-item')!.click()
+    const editor = artalk.ctx.inject('editor')
+    expect(editor.getContentRaw()).toBe('🙂')
+    root.querySelector<HTMLElement>('.atk-grp-switcher [data-index="1"]')!.click()
+    expect(root.querySelector<HTMLElement>('.atk-grp[data-index="0"]')!.style.display).toBe('none')
+    root.querySelector<HTMLElement>('.atk-grp[data-index="1"] .atk-item')!.click()
+    expect(editor.getContentRaw()).toBe('🙂:[smile]')
+    root.querySelector<HTMLElement>('[aria-label="Preview"]')!.click()
+    await vi.waitFor(() =>
+      expect(root.querySelector('.atk-editor-plug-preview img')?.getAttribute('src')).toBe(
+        'https://example.com/smile.png',
+      ),
+    )
+    artalk.update({ locale: 'zh-CN' })
+    expect(editor.getContentRaw()).toBe('🙂:[smile]')
+    expect(JSON.stringify(packs)).toBe(original)
+  })
+
+  it('does not submit twice while the first write is pending', async () => {
+    const api = mockApi()
+    const pending = deferred<Awaited<ReturnType<typeof api.comments.createComment>>>()
+    vi.mocked(api.comments.createComment).mockReturnValue(pending.promise)
+    const artalk = await initialize(api)
+    const editor = artalk.ctx.inject('editor')
+    editor.setContent('Once')
+    editor.submit()
+    editor.submit()
+    await vi.waitFor(() => expect(api.comments.createComment).toHaveBeenCalledTimes(1))
+    pending.resolve(response(comment(1, 'Once')))
+    await vi.waitFor(() => expect(artalk.ctx.getComments()).toHaveLength(1))
+  })
+
+  it.each(['page', 'account', 'destroy'] as const)(
+    'does not apply a completed write after %s changes',
+    async (change) => {
+      const api = mockApi()
+      const pending = deferred<Awaited<ReturnType<typeof api.comments.createComment>>>()
+      vi.mocked(api.comments.createComment).mockReturnValue(pending.promise)
+      const artalk = await initialize(api)
+      const editor = artalk.ctx.inject('editor')
+      const submitted = vi.fn()
+      artalk.on('editor-submitted', submitted)
+      editor.setContent('Original draft')
+      editor.submit()
+      await vi.waitFor(() => expect(api.comments.createComment).toHaveBeenCalledTimes(1))
+      if (change === 'page') artalk.update({ pageKey: '/next' })
+      else if (change === 'account')
+        artalk.ctx.getUser().update({ name: 'Bob', email: 'bob@example.com', token: 'bob-token' })
+      else artalk.destroy()
+      pending.resolve(response(comment(1, 'Original draft')))
+      await pending.promise
+      // Allow both reqAdd and Submit to handle the completed response.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(artalk.ctx.getComments()).toEqual([])
+      if (change === 'page') {
+        expect(editor.getContentRaw()).toBe('')
+        artalk.update({ pageKey: '/' })
+      }
+      expect(editor.getContentRaw()).toBe('Original draft')
+      expect(submitted).not.toHaveBeenCalled()
+    },
+  )
+
+  it('completes a submission when login refreshes the same viewer token', async () => {
+    const api = mockApi()
+    const pending = deferred<Awaited<ReturnType<typeof api.comments.createComment>>>()
+    vi.mocked(api.comments.createComment).mockReturnValue(pending.promise)
+    const artalk = await initialize(api)
+    const editor = artalk.ctx.inject('editor')
+    editor.setContent('After login')
+    editor.submit()
+    await vi.waitFor(() => expect(api.comments.createComment).toHaveBeenCalledTimes(1))
+    artalk.ctx.getUser().update({ token: 'authenticated-token', is_admin: true })
+    pending.resolve(response(comment(1, 'After login')))
+    await vi.waitFor(() => expect(artalk.ctx.getComments()).toHaveLength(1))
+    expect(editor.getContentRaw()).toBe('')
+  })
+
+  it('shows version mismatches only to administrators and keeps ignore effective', async () => {
+    const api = mockApi()
+    vi.mocked(api.conf.conf).mockResolvedValue(
+      response({ frontend_conf: {}, version: { ...version, version: '2.10.0' } }),
+    )
+    const artalk = await initialize(api)
+    const notice = () => artalk.getEl().querySelector('.atk-version-check-notice')
+    expect(notice()).toBeNull()
+    artalk.ctx.getUser().update({ token: 'member-token', is_admin: false })
+    expect(notice()).toBeNull()
+
+    artalk.ctx.getUser().update({ token: 'admin-token', is_admin: true })
+    expect(notice()?.textContent).toContain('2.10.0')
+    artalk.ctx.getUser().logout()
+    expect(notice()).toBeNull()
+    artalk.ctx.getUser().update({ token: 'admin-token', is_admin: true })
+    expect(notice()).not.toBeNull()
+
+    artalk.update({ versionCheck: false })
+    expect(notice()).toBeNull()
+    artalk.update({ versionCheck: true, apiVersion: artalkVersion })
+    expect(notice()).toBeNull()
+    artalk.update({ apiVersion: '2.10.0', locale: 'zh-CN' })
+    expect(notice()?.textContent).toContain('请更新')
+    notice()!.querySelector<HTMLElement>('.atk-ignore-btn')!.click()
+    artalk.update({ locale: 'en' })
+    artalk.ctx.getUser().logout()
+    artalk.ctx.getUser().update({ token: 'admin-token', is_admin: true })
+    expect(notice()).toBeNull()
+  })
+
+  it('removes the version notice after logout or destroy when the list is relocated', async () => {
+    const artalk = await initialize()
+    const host = document.createElement('section')
+    document.body.append(host)
+    host.append(artalk.ctx.inject('list').getEl())
+    artalk.update({ apiVersion: '2.10.0' })
+    artalk.ctx.getUser().update({ token: 'admin-token', is_admin: true })
+    expect(host.querySelector('.atk-version-check-notice')).not.toBeNull()
+    artalk.ctx.getUser().logout()
+    expect(host.querySelector('.atk-version-check-notice')).toBeNull()
+    artalk.ctx.getUser().update({ token: 'admin-token', is_admin: true })
+    expect(host.querySelector('.atk-version-check-notice')).not.toBeNull()
+    artalk.destroy()
+    expect(host.querySelector('.atk-version-check-notice')).toBeNull()
+  })
+
+  it('keeps the legacy behavior of deprecated useBackendConf', async () => {
+    const api = mockApi()
+    vi.mocked(api.conf.conf).mockResolvedValue(
+      response({ frontend_conf: { placeholder: 'Remote' }, version }),
+    )
+    const artalk = await initialize(api, {
+      useBackendConf: false,
+      placeholder: 'Local',
+      preferRemoteConf: true,
+    })
+    expect(api.conf.conf).toHaveBeenCalledTimes(1)
+    expect(artalk.getConf().placeholder).toBe('Remote')
+  })
+
+  it.each([false, true])(
+    'shares a pending plugin load (first widget destroyed: %s)',
+    async (destroyFirst) => {
+      const previous = window.ArtalkPlugins
+      const plugin = vi.fn()
+      const start = instances.length
+      const loading = [
+        initialize(mockApi(), { pluginURLs: ['/shared-plugin.js'] }),
+        initialize(mockApi(), { pluginURLs: ['/shared-plugin.js'] }),
+      ]
+      const selector = 'script[src="https://example.com/shared-plugin.js"]'
+      try {
+        await vi.waitFor(() => expect(document.querySelectorAll(selector)).toHaveLength(1))
+        if (destroyFirst) instances[start].destroy()
+        window.ArtalkPlugins = { smoke: plugin }
+        document.querySelector(selector)!.dispatchEvent(new Event('load'))
+        const [first, second] = await Promise.all(loading)
+        expect(plugin).toHaveBeenCalledTimes(destroyFirst ? 1 : 2)
+        expect(plugin).toHaveBeenCalledWith(second.ctx, undefined)
+        if (!destroyFirst) expect(plugin).toHaveBeenCalledWith(first.ctx, undefined)
+      } finally {
+        window.ArtalkPlugins = previous
+        document.querySelector(selector)?.remove()
+      }
+    },
+  )
+
+  it('retries initialization without duplicate lifecycle events or requests', async () => {
+    const el = document.createElement('div')
+    document.body.append(el)
+    const conf = { el, server: 'https://example.com', emoticons: false as const }
+    const artalk = new Artalk(conf)
+    instances.push(artalk)
+    const api = mockApi()
+    bindApi(artalk.ctx, api)
+    vi.mocked(api.conf.conf).mockRejectedValueOnce(new Error('Unavailable'))
+    const created = vi.fn()
+    const mounted = vi.fn()
+    artalk.on('created', created)
+    artalk.on('mounted', mounted)
+    await expect(mount(conf, artalk.ctx)).rejects.toThrow('Unavailable')
+    await mount(conf, artalk.ctx)
+    await mount(conf, artalk.ctx)
+    expect(created).toHaveBeenCalledTimes(1)
+    expect(mounted).toHaveBeenCalledTimes(1)
+    expect(api.comments.getComments).toHaveBeenCalledTimes(1)
+    expect(el.querySelectorAll('.atk-list')).toHaveLength(1)
+  })
+
+  it('allows a later widget to retry a failed plugin download', async () => {
+    const previous = window.ArtalkPlugins
+    const plugin = vi.fn()
+    const selector = 'script[src="https://example.com/retry-plugin.js"]'
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const first = initialize(mockApi(), { pluginURLs: ['/retry-plugin.js'] })
+      await vi.waitFor(() => expect(document.querySelector(selector)).not.toBeNull())
+      document.querySelector(selector)!.dispatchEvent(new Event('error'))
+      await first
+      expect(document.querySelector(selector)).toBeNull()
+      const retry = initialize(mockApi(), { pluginURLs: ['/retry-plugin.js'] })
+      await vi.waitFor(() => expect(document.querySelector(selector)).not.toBeNull())
+      window.ArtalkPlugins = { smoke: plugin }
+      document.querySelector(selector)!.dispatchEvent(new Event('load'))
+      const artalk = await retry
+      expect(plugin).toHaveBeenCalledExactlyOnceWith(artalk.ctx, undefined)
+    } finally {
+      window.ArtalkPlugins = previous
+      document.querySelector(selector)?.remove()
+    }
+  })
+
+  it('does not mount or start requests after a created listener destroys the instance', async () => {
+    const el = document.createElement('div')
+    document.body.append(el)
+    const conf = { el, emoticons: false as const }
+    const artalk = new Artalk(conf)
+    instances.push(artalk)
+    const api = mockApi()
+    bindApi(artalk.ctx, api)
+    const mounted = vi.fn()
+    artalk.on('created', () => artalk.destroy())
+    artalk.on('mounted', mounted)
+    await mount(conf, artalk.ctx)
+    expect(mounted).not.toHaveBeenCalled()
+    expect(api.comments.getComments).not.toHaveBeenCalled()
+    expect(el.childElementCount).toBe(0)
+  })
+})

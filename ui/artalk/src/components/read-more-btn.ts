@@ -26,16 +26,20 @@ export default class ReadMoreBtn {
     return this.total > this.offset + this.opts.pageSize
   }
 
+  get hasError() {
+    return this.$el.classList.contains('atk-err')
+  }
+
   public constructor(opts: ReadMoreBtnOptions) {
     this.opts = opts
     this.origText = this.opts.text || this.origText
 
     this.$el = Utils.createElement(
       `<div class="atk-list-read-more" style="display: none;">
-      <div class="atk-list-read-more-inner">
-        <div class="atk-loading-icon" style="display: none;"></div>
+      <button type="button" tabindex="0" class="atk-list-read-more-inner">
+        <span class="atk-loading-icon" style="display: none;"></span>
         <span class="atk-text">${this.origText}</span>
-      </div>
+      </button>
     </div>`,
     )
 
@@ -64,6 +68,13 @@ export default class ReadMoreBtn {
 
   /** 加载 */
   setLoading(isLoading: boolean) {
+    const button = this.$el.querySelector('button')!
+    button.disabled = isLoading
+    button.setAttribute('aria-busy', String(isLoading))
+    if (isLoading) {
+      this.$el.classList.remove('atk-err')
+      this.$text.innerText = this.origText
+    }
     this.$loading.style.display = isLoading ? '' : 'none'
     this.$text.style.display = isLoading ? 'none' : ''
   }
@@ -74,10 +85,12 @@ export default class ReadMoreBtn {
 
     this.$text.innerText = errMsg
     this.$el.classList.add('atk-err')
-    window.setTimeout(() => {
-      this.$text.innerText = this.origText
-      this.$el.classList.remove('atk-err')
-    }, 2000) // 2s后错误提示复原
+  }
+
+  /** @internal */
+  dispose() {
+    this.$el.onclick = null
+    this.$el.remove()
   }
 
   /** 更新数据 */

@@ -132,6 +132,29 @@ The built binary file will be located in the `./bin` directory.
 
 ## Frontend Development (UI)
 
+### Frontend State
+
+Stored logins are scoped to the server URL. Legacy profile fields still load, but old tokens
+without a server binding require a new login. Guest credentials keep their existing storage keys.
+Use `ctx.getApi()` when starting a request so it uses the current server and user.
+
+Initialize plugins after the final config is loaded. Retrying a failed initialization must not
+register plugins or fire lifecycle events twice. Language settings are shared by the page.
+
+Release listeners, timers, and pending work on `unmounted`. Cleanup must continue if another
+plugin throws. A destroyed widget must not change the page or finish a login.
+
+Keep list loading and cancellation in `ui/artalk/src/services/comments.ts`, using the existing
+API. Check for stale results after `await`. Preserve v2 request fields and plugin events.
+
+Drafts are stored per server, site, and page. The old draft is imported on first use.
+Config updates must keep the current draft and reply or edit target. Navigation must clear the
+old target without deleting its saved draft. Login retries must not submit twice.
+
+Each widget owns its Markdown parser. Use `ctx.getMarked()` after `mounted` to add extensions.
+Config updates keep the parser and its plugin extensions. Comments, quotes, and previews use
+the same parser. Run `pnpm -F artalk test --run` to check these behaviors.
+
 ### Run Frontend
 
 1. **Install Dependencies**:  

@@ -32,21 +32,30 @@ export interface EditorEventPayloadMap {
 export const EditorKit: ArtalkPlugin = (ctx) => {
   ctx.provide(
     'editorPlugs',
-    (editor, config, user, data, checkers, api) => {
+    (editor, config, user, data, checkers) => {
       const pluginManager = new PluginManager({
         getArtalkRootEl: () => ctx.getEl(),
         getEditor: () => editor,
         getConf: () => config,
         getUser: () => user,
-        getApi: () => api,
+        getApi: () => ctx.getApi(),
         getData: () => data,
         getCheckers: () => checkers,
         onSubmitted: () => ctx.trigger('editor-submitted'),
       })
       editor.setPlugins(pluginManager)
+      ctx.on('user-changed', () => {
+        if (editor.getState() === 'edit') return
+        const fields = user.getData()
+        Object.entries(editor.getHeaderInputEls()).forEach(([key, input]) => {
+          const value = fields[key] || ''
+          if (input.value.trim() !== value) input.value = value
+        })
+      })
+      ctx.on('unmounted', () => pluginManager.dispose())
       return pluginManager
     },
-    ['editor', 'config', 'user', 'data', 'checkers', 'api'] as const,
+    ['editor', 'config', 'user', 'data', 'checkers'] as const,
   )
 }
 
@@ -67,34 +76,67 @@ export class PluginManager implements IEditorPluginManager {
   private events = new EventManager<EditorEventPayloadMap>()
 
   constructor(public opts: PluginManagerOptions) {
+    opts.getConf().watchConf(['markedOptions', 'markedReplacers', 'imgLazyLoad'], () => {
+      this.events.trigger('content-updated', this.getEditor().getContentRaw())
+    })
     let confLoaded = false // config not loaded at first time
+    let destination = ''
     this.opts
       .getConf()
-      .watchConf(['imgUpload', 'emoticons', 'preview', 'editorTravel', 'locale'], (conf) => {
-        // trigger unmount event will call all plugs' unmount function
-        // (this will only be called while conf reloaded, not be called at first time)
-        confLoaded && this.getEvents().trigger('unmounted')
+      .watchConf(
+        [
+          'imgUpload',
+          'imgUploader',
+          'emoticons',
+          'preview',
+          'editorTravel',
+          'locale',
+          'server',
+          'site',
+          'pageKey',
+        ],
+        (conf) => {
+          const current = JSON.stringify([conf.server, conf.site, conf.pageKey])
+          const samePage = destination === current
+          destination = current
+          const editor = this.getEditor()
+          const state = editor.getState()
+          const payload = samePage ? editor.getStatePayload?.() : undefined
+          const draft = editor.getContentRaw()
+          // trigger unmount event will call all plugs' unmount function
+          // (this will only be called while conf reloaded, not be called at first time)
+          if (confLoaded) this.dispose()
 
-        // reset the plugs
-        this.clear()
+          // reset the plugs
+          this.clear()
 
-        // init the all enabled plugs
-        getEnabledPlugs(conf).forEach((Plug) => {
-          // create the plug instance
-          const kit = new PlugKit(this)
-          this.plugins.push(new Plug(kit))
-        })
+          // init the all enabled plugs
+          getEnabledPlugs(conf).forEach((Plug) => {
+            // create the plug instance
+            const kit = new PlugKit(this)
+            this.plugins.push(new Plug(kit))
+          })
 
-        // trigger event for plug initialization
-        this.getEvents().trigger('mounted')
-        confLoaded = true
+          // trigger event for plug initialization
+          this.getEvents().trigger('mounted')
+          confLoaded = true
 
-        // refresh the plug UI
-        this.loadPluginUI()
-      })
-
-    this.events.on('panel-close', () => this.closePluginPanel())
-    this.events.on('editor-submitted', () => opts.onSubmitted())
+          // refresh the plug UI
+          this.loadPluginUI()
+          // Rebind reply/edit effects to the new plugins without losing the draft.
+          if (payload) {
+            // A locale update can also replace the comment DOM.
+            const element =
+              this.opts
+                .getArtalkRootEl()
+                .querySelector<HTMLElement>(`[id="atk-comment-${payload.comment.id}"]`) ||
+              payload.$comment
+            if (state === 'edit') editor.setEditComment(payload.comment, element)
+            if (state === 'reply') editor.setReplyComment(payload.comment, element)
+          }
+          if (samePage) editor.setContent(draft)
+        },
+      )
   }
 
   getPlugins() {
@@ -113,10 +155,32 @@ export class PluginManager implements IEditorPluginManager {
     return this.opts
   }
 
+  /** @internal */
+  dispose() {
+    try {
+      try {
+        this.closePluginPanel()
+      } finally {
+        this.events.trigger('unmounted')
+      }
+    } finally {
+      this.events.dispose()
+      try {
+        // Resetting edit mode changes content. Disposed listeners must not save
+        // that temporary empty value over the visitor's draft or start timers.
+        this.getEditor().resetState()
+      } finally {
+        this.plugins = []
+        this.openedPlug = null
+      }
+    }
+  }
+
   private clear() {
     this.plugins = []
     this.events = new EventManager()
-    if (this.openedPlug) this.closePluginPanel()
+    this.events.on('panel-close', () => this.closePluginPanel())
+    this.events.on('editor-submitted', () => this.opts.onSubmitted())
   }
 
   private loadPluginUI() {

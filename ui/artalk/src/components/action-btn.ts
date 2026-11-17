@@ -35,13 +35,23 @@ export default class ActionBtn {
 
   /** 构造函数 */
   constructor(opts: ActionBtnOptions | string | (() => string)) {
-    this.$el = Utils.createElement(`<span class="atk-common-action-btn"></span>`)
+    this.$el = Utils.createElement(
+      '<button type="button" tabindex="0" class="atk-common-action-btn"></button>',
+    )
 
     this.opts = typeof opts !== 'object' ? { text: opts } : opts
     this.$el.innerText = this.getText()
 
     // 仅管理员可操作
     if (this.opts.adminOnly) this.$el.setAttribute('atk-only-admin-show', '')
+  }
+
+  /** @internal */
+  public dispose() {
+    this.clearMsgRecTimer()
+    window.clearTimeout(this.confirmRecTimer)
+    this.$el.onclick = null
+    this.$el.remove()
   }
 
   /** 将按钮装载到指定元素 */
@@ -108,6 +118,8 @@ export default class ActionBtn {
   public setLoading(value: boolean, loadingText?: string) {
     if (this.isLoading === value) return
     this.isLoading = value
+    this.$el.setAttribute('aria-disabled', String(value))
+    this.$el.setAttribute('aria-busy', String(value))
     if (value) {
       this.$el.classList.add('atk-btn-loading')
       this.$el.innerText = loadingText || `${$t('loading')}...`

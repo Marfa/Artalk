@@ -19,7 +19,7 @@ type RequestUserInfoUpdate struct {
 }
 
 type ResponseUserInfoUpdate struct {
-	User entity.CookedUser `json:"user"`
+	User entity.UserDTO `json:"user"`
 }
 
 // @Id           UpdateProfile
@@ -87,7 +87,7 @@ func UserInfoUpdate(app *core.App, router fiber.Router) {
 		if p.Link != "" {
 			// Check link format
 			if !utils.ValidateURL(p.Link) {
-				user.Link = "https://" + p.Link
+				p.Link = "https://" + p.Link
 			}
 
 			user.Link = p.Link
@@ -98,7 +98,7 @@ func UserInfoUpdate(app *core.App, router fiber.Router) {
 		}
 
 		return common.RespData(c, ResponseUserInfoUpdate{
-			User: app.Dao().CookUser(&user),
+			User: app.Dao().BuildUserDTO(&user),
 		})
 	}))
 }

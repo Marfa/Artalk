@@ -72,17 +72,33 @@ func (pusher *NotifyPusher) getAdminNotifySubjectBody(comment *entity.Comment, t
 	return subject, body
 }
 
+// webhookComment keeps CommentDTO.content as raw markdown (upstream contract)
+// and adds email/content_raw for admin bots (marfabot).
+type webhookComment struct {
+	entity.CommentDTO
+	ContentRaw string `json:"content_raw"`
+	Email      string `json:"email"`
+}
+
+func (pusher *NotifyPusher) buildWebhookComment(c *entity.Comment) webhookComment {
+	user := pusher.dao.FetchUserForComment(c)
+	return webhookComment{
+		CommentDTO: pusher.dao.BuildCommentDTO(c),
+		ContentRaw: c.Content,
+		Email:      user.Email,
+	}
+}
+
 func (pusher *NotifyPusher) sendWebhook(subject string, body string, comment *entity.Comment, pComment *entity.Comment) {
-	// Admin webhook gets CookCommentForEmail so receivers can show nick/email/content_raw.
-	var pCommentCooked any
+	var parent any
 	if pComment != nil && !pComment.IsEmpty() {
-		pCommentCooked = pusher.dao.CookCommentForEmail(pComment)
+		parent = pusher.buildWebhookComment(pComment)
 	}
 
 	sender.SendWebHook(pusher.conf.WebHook.URL, &sender.NotifyWebHookReqBody{
 		NotifySubject: subject,
 		NotifyBody:    body,
-		Comment:       pusher.dao.CookCommentForEmail(comment),
-		ParentComment: pCommentCooked,
+		Comment:       pusher.buildWebhookComment(comment),
+		ParentComment: parent,
 	})
 }

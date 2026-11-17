@@ -67,7 +67,9 @@ func TestFailedApprovalDoesNotPublishOrNotify(t *testing.T) {
 	require.True(t, d.FindNotify(parent.UserID, reply.ID).IsEmpty(), "failed approval must not notify the reader")
 }
 
-func TestApprovalRetriesAfterNotificationWriteFailure(t *testing.T) {
+// Marfa: approve must succeed even when notify persistence fails (Telegram/admin bots).
+// Upstream rolls the approval back on notify errors; we keep best-effort renotify.
+func TestApprovalSucceedsWhenNotificationWriteFails(t *testing.T) {
 	for _, existing := range []bool{false, true} {
 		t.Run(fmt.Sprintf("existing=%v", existing), func(t *testing.T) {
 			app, router := NewApiTestApp()
@@ -97,21 +99,14 @@ func TestApprovalRetriesAfterNotificationWriteFailure(t *testing.T) {
 			require.NoError(t, err)
 			path := fmt.Sprintf("/comments/%d", reply.ID)
 			update := handler.ParamsCommentUpdate{Content: reply.Content, PageKey: reply.PageKey, SiteName: reply.SiteName, Rid: reply.Rid}
-			flowRequest(t, router, http.MethodPut, path, update, admin, http.StatusInternalServerError)
-			require.True(t, d.FindComment(reply.ID).IsPending)
+			flowRequest(t, router, http.MethodPut, path, update, admin, http.StatusOK)
+			require.False(t, d.FindComment(reply.ID).IsPending)
 			notify := d.FindNotify(parent.UserID, reply.ID)
 			if existing {
 				require.True(t, notify.IsRead)
 			} else {
 				require.True(t, notify.IsEmpty())
 			}
-			require.NoError(t, d.DB().Callback().Create().Remove("test:notify_failure"))
-			require.NoError(t, d.DB().Callback().Update().Remove("test:notify_failure"))
-			flowRequest(t, router, http.MethodPut, path, update, admin, http.StatusOK)
-			require.False(t, d.FindComment(reply.ID).IsPending)
-			notify = d.FindNotify(parent.UserID, reply.ID)
-			require.False(t, notify.IsEmpty())
-			require.False(t, notify.IsRead)
 		})
 	}
 }

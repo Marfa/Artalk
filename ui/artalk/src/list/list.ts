@@ -8,6 +8,8 @@ import { CommentNode } from '@/comment'
 import type { Api } from '@/api'
 
 export interface ListOptions {
+  /** @internal */
+  renderMarkdown?: (src: string) => string
   getApi: () => Api
   getEvents: () => EventManager
   getConf: () => ConfigManager
@@ -49,6 +51,11 @@ export class List implements IList {
       ...opts,
     })
 
+    opts.getConf().watchConf(['locale', 'markedOptions', 'markedReplacers', 'imgLazyLoad'], () => {
+      this.commentNodes.forEach((node) => node.render())
+    })
+    opts.getEvents().on('unmounted', () => this.clear())
+
     // Bind events
     this.initCrudEvents()
   }
@@ -78,6 +85,12 @@ export class List implements IList {
     })
   }
 
+  private clear() {
+    this.commentNodes.forEach((node) => node.remove())
+    this.commentNodes = []
+    this.$commentsWrap.replaceChildren()
+  }
+
   private initCrudEvents() {
     this.opts.getEvents().on('list-load', (comments) => {
       // 导入数据
@@ -86,8 +99,7 @@ export class List implements IList {
 
     this.opts.getEvents().on('list-loaded', (comments) => {
       if (comments.length === 0) {
-        this.commentNodes = []
-        this.$commentsWrap.innerHTML = ''
+        this.clear()
       }
     })
 

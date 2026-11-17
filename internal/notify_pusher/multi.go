@@ -73,16 +73,16 @@ func (pusher *NotifyPusher) getAdminNotifySubjectBody(comment *entity.Comment, t
 }
 
 func (pusher *NotifyPusher) sendWebhook(subject string, body string, comment *entity.Comment, pComment *entity.Comment) {
-	// Admin webhook gets CookCommentForEmail so receivers can show nick/email/content_raw.
-	var pCommentCooked any
+	// Admin webhook gets EmailCommentDTO so receivers (marfabot) can show nick/email/content_raw.
+	var parentCommentDTO entity.EmailCommentDTO
 	if pComment != nil && !pComment.IsEmpty() {
-		pCommentCooked = pusher.dao.CookCommentForEmail(pComment)
+		parentCommentDTO = pusher.dao.BuildEmailCommentDTO(pComment)
 	}
 
 	sender.SendWebHook(pusher.conf.WebHook.URL, &sender.NotifyWebHookReqBody{
 		NotifySubject: subject,
 		NotifyBody:    body,
-		Comment:       pusher.dao.CookCommentForEmail(comment),
-		ParentComment: pCommentCooked,
+		Comment:       pusher.dao.BuildEmailCommentDTO(comment),
+		ParentComment: parentCommentDTO,
 	})
 }

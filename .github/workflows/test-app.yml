@@ -87,7 +87,7 @@ jobs:
           gotestsum \
             --junitfile "$REPORT_DIR/unit-tests.xml" \
             --jsonfile "$REPORT_DIR/unit-tests.json" \
-            -- -coverprofile="$REPORT_DIR/coverage.out" ./...
+            -- -count=1 -coverpkg=./... -coverprofile="$REPORT_DIR/coverage.out" ./...
 
       - name: Upload test results
         if: ${{ !cancelled() }}

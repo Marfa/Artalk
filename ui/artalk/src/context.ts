@@ -8,7 +8,6 @@ import type {
   Services,
 } from './types'
 import * as I18n from './i18n'
-import * as marked from './lib/marked'
 import { createInjectionContainer } from './lib/injection'
 import type { CheckerCaptchaPayload, CheckerPayload } from './components/checker'
 
@@ -32,9 +31,11 @@ class Context implements IContext {
     if (this._destroyed) return
     this._destroyed = true
 
-    this.trigger('unmounted')
-    while (this._$root.firstChild) {
-      this._$root.removeChild(this._$root.firstChild)
+    try {
+      this.trigger('unmounted')
+    } finally {
+      this.inject('events').dispose?.()
+      this._$root.replaceChildren()
     }
   }
 
@@ -106,6 +107,7 @@ class Context implements IContext {
   }
 
   trigger: IContext['trigger'] = (name, payload) => {
+    if (this._destroyed && name !== 'unmounted') return
     this.inject('events').trigger(name, payload)
   }
 
@@ -117,6 +119,7 @@ class Context implements IContext {
   }
 
   updateConf(conf: ConfigPartial): void {
+    if (this._destroyed) return
     this.inject('config').update(conf)
   }
 
@@ -128,7 +131,7 @@ class Context implements IContext {
   }
 
   getMarked() {
-    return marked.getInstance()
+    return this.inject('markdown').getInstance()
   }
 
   setDarkMode(darkMode: boolean | 'auto'): void {

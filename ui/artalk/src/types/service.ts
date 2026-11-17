@@ -13,12 +13,19 @@ import type {
   CheckerManager,
 } from '@/types'
 
+import type { CommentService } from '@/services/comments'
+import type { createMarkdown } from '@/lib/marked'
+
 export interface Services {
   config: ConfigManager
   events: EventManager
   data: DataManager
   api: Api
   apiHandlers: ApiHandlers
+  /** @internal Comment request lifecycle. */
+  comments: CommentService
+  /** @internal Instance-local Markdown renderer. */
+  markdown: ReturnType<typeof createMarkdown>
   editor: Editor
   editorPlugs: EditorPluginManager | undefined
   list: List

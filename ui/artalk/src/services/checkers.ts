@@ -4,9 +4,9 @@ import { CheckerLauncher } from '@/components/checker'
 export const CheckersService: ArtalkPlugin = (ctx) => {
   ctx.provide(
     'checkers',
-    (api, apiHandlers, layers, user, config) => {
+    (apiHandlers, layers, user, config) => {
       const checkers = new CheckerLauncher({
-        getApi: () => api,
+        getApi: () => ctx.getApi(),
         getLayers: () => layers,
         getUser: () => user,
         onReload: () => ctx.reload(),
@@ -15,11 +15,28 @@ export const CheckersService: ArtalkPlugin = (ctx) => {
         getCaptchaIframeURL: () => `${config.get().server}/api/v2/captcha/?t=${+new Date()}`,
       })
 
+      let server = config.get().server
+      ctx.watchConf(['server'], (conf) => {
+        if (server !== conf.server) checkers.cancelAll()
+        server = conf.server
+      })
+      const identity = () => {
+        const { name, email, token } = user.getData()
+        return JSON.stringify([name, email, token])
+      }
+      let viewer = identity()
+      ctx.on('user-changed', () => {
+        const current = identity()
+        if (viewer !== current) checkers.cancelAll()
+        viewer = current
+      })
+      ctx.on('unmounted', () => checkers.dispose())
+
       apiHandlers.add('need_captcha', (res) => checkers.checkCaptcha(res))
       apiHandlers.add('need_login', () => checkers.checkAdmin({}))
 
       return checkers
     },
-    ['api', 'apiHandlers', 'layers', 'user', 'config'] as const,
+    ['apiHandlers', 'layers', 'user', 'config'] as const,
   )
 }
